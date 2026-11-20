@@ -359,7 +359,7 @@ type ReporterSummary = readonly { label: string; text: string }[];
 - すべてのレポーターを並行して実行し、それぞれに 1 分の期限を設けます。
 - タイムアウト、例外、不正な戻り値は stderr に報告します。実行の状態、終了コード、レポートは変わりません。
 - Ctrl-C が 1 回ならレポーターの完了を待ちます。2 回目の Ctrl-C で待機をやめますが、[`printsTo`](#printsto) を設定したレポーターは例外です。
-- 予算を使い切るか、実行を強制停止すると `signal` が中止状態になります。
+- 期限が切れるか、実行を強制停止すると `signal` が中止状態になります。
 - ランナーは `onRunFinished` を呼ぶ前に、トレースページ `results/<test>/trace.md` を書き込みます。
 
 <Note>

@@ -185,7 +185,7 @@ Web で並行実行できるかどうかは、ターゲットの `app` により
 
 | ターゲットの `app` | セッションを開いたままのテスト実行 |
 | --- | --- |
-| `command` なし | どちらも自分で起動したアプリを使います。 |
+| `command` なし | どちらも、ユーザーが起動したアプリを使います。 |
 | ポート [`0`](/web#let-the-runner-pick-the-port) の `url` | それぞれアプリを起動します。`next dev` のように、ディレクトリごとに 1 つしか起動できない開発サーバーでは失敗します。 |
 | [`reuseExisting: true`](/web#starting-your-app) 付きの `command` | セッションが起動したアプリをテスト実行も使います。実行中でも、セッションを閉じるとアプリは停止します。 |
 | 固定ポートの `command`、`reuseExisting` なし | `APP_ALREADY_RUNNING` で失敗します。 |

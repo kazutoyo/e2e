@@ -188,7 +188,7 @@ interface WebConnectOptions {
 
 #### `headers`
 
-アプリのオリジン（`app.url` のスキーム、ホスト、ポート）から始まるすべてのリクエストに加えるヘッダーです。別ポート、サブドメイン、ほかのホストから始まるリクエストには付きません。リダイレクトでは、転送先のオリジンにかかわらず、最初のリクエストのヘッダーを維持します。
+最初の宛先がアプリのオリジン（`app.url` のスキーム、ホスト、ポート）であるすべてのリクエストに加えるヘッダーです。最初の宛先が別ポート、サブドメイン、ほかのホストのリクエストには付きません。リダイレクトでは、転送先のオリジンにかかわらず、最初のリクエストのヘッダーを維持します。
 
 ```ts
 web({ headers: { 'x-preview-token': process.env.PREVIEW_TOKEN ?? '' } });
@@ -513,7 +513,7 @@ const title = await browser.evaluate<string>('document.title');
 
 | エラー | 発生条件 |
 | --- | --- |
-| `INVALID_ARGUMENT` | `arg` または戻り値が [`JsonValue`](#jsonvalue) ではない場合。`DOMRect` や要素などのクラスインスタンスは該当しません。`rect.toJSON()` または必要なフィールドを返してください。 |
+| `INVALID_ARGUMENT` | `arg` または戻り値が [`JsonValue`](#jsonvalue) ではない場合。`DOMRect` や要素などのクラスインスタンスも該当します。`rect.toJSON()` または必要なフィールドを返してください。 |
 | `EVALUATE_FAILED` | 評価したコードが例外をスローした場合、またはページがエンジンに必要な `Map` などの JavaScript 組み込みを置き換えた場合。エラーにメッセージを含めます。 |
 | `ACTION_FAILED` | Playwright のタイムアウト。 |
 | `ENGINE_FAILURE` | ページが閉じたか、コンテキストが失われた場合。 |
@@ -528,7 +528,7 @@ await browser.route('**/api/quote', async (route) => {
 });
 ```
 
-`route.fetch()` は、ルートの処理方法を決定せずに、転送先の `{ url, status, headers, body(), text(), json() }` を返します。対象オリジンが設定済みヘッダーの送信対象なら、そのヘッダーを使います。アクションのタイムアウトが適用されます。ページ遷移のルールを超える可能性があるため、リダイレクトには従いません。
+`route.fetch()` は、ルートの処理方法を決定せずに、本来の送信先からの `{ url, status, headers, body(), text(), json() }` を返します。対象オリジンが設定済みヘッダーの送信対象なら、そのヘッダーを使います。アクションのタイムアウトが適用されます。ページ遷移のルールを超える可能性があるため、リダイレクトには従いません。
 
 - パターンは文字列または `RegExp` で、どちらも URL 全体と照合します。文字列の `*` はパスの 1 セグメント内、`**` は `/` をまたいで一致し、`?` は任意の 1 文字、`\` は次の文字をエスケープします。`unroute` と `waitForResponse` も同じパターンを使います。
 - ルートは `app.restart()`、`app.clearState()`、セッションの復元をまたいでも残ります。

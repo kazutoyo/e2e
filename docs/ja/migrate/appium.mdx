@@ -195,8 +195,8 @@ await agent.act('sign in as {username}', { params: { username: ada.username, pas
 | `driver.setGeoLocation({ latitude, longitude })` | `device.setLocation({ latitude, longitude })` |
 | `driver.setOrientation('LANDSCAPE')`, `mobile: setAppearance` | `device.setOrientation('landscape-left')`、`device.setAppearance('dark')` |
 | `driver.setClipboard(t)`, `driver.getClipboard()` | `device.setClipboard(t)`、`device.clipboard()`。Appium の base64 に対し、プレーンテキスト |
-| `driver.toggleWiFi(false)`, `mobile: setConnectivity` と `wifi: false` | `device.setNetwork('offline')`。Wi-Fi のみ、Android のみ |
-| `driver.toggleAirplaneMode()`、`mobile: setConnectivity` と `airplaneMode: true` | `device.setAirplaneMode(true)`。Wi-Fi と携帯回線、Android 11 以降 |
+| `driver.toggleWiFi(false)`, `wifi: false` を指定した `mobile: setConnectivity` | `device.setNetwork('offline')`。Wi-Fi のみ、Android のみ |
+| `driver.toggleAirplaneMode()`、`airplaneMode: true` を指定した `mobile: setConnectivity` | `device.setAirplaneMode(true)`。Wi-Fi と携帯回線、Android 11 以降 |
 | `mobile: enrollBiometric`, `mobile: sendBiometricMatch`, `driver.fingerPrint(1)` | `device.enrollBiometrics('faceid', true)`、`device.setBiometrics('faceid', 'match')`、または `'fingerprint'` |
 | `mobile: clearKeychains` | `device.clearKeychain()`。iOS シミュレーターのみ |
 | `driver.isIOS`, `driver.isAndroid` | テストの `{ platforms: ['ios'] }`、または `platform` フィクスチャ |

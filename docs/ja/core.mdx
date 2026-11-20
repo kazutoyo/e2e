@@ -247,8 +247,7 @@ if (order.total <= 39_000) {
 
 `cache` を指定すると、`act` が各フローを記録し、次の実行でモデルを呼び出さずにリプレイします。
 各 `act` には記録名の `cacheKey` を指定するか、`cache: false` でライブ実行します。
-どちらも指定しない `act` は `INVALID_ARGUMENT` で失敗します。
-`createAgent` の呼び出しに `cache` オプションを直接書いた場合は、TypeScript もその呼び出しを拒否します。
+どちらも指定しない `act` は `INVALID_ARGUMENT` で失敗し、`createAgent` の呼び出しに `cache` オプションを直接書いた場合は、TypeScript でも型エラーになります。
 
 記録のキーには `cacheKey`、指示、パラメーター、アプリ、セッション内の同じ呼び出しの回数が含まれます。
 実行間で変わる値はパラメーターとして渡してください。

@@ -116,7 +116,7 @@ const executor = decisionExecutor({
 
 ## しきい値を設定する
 
-2 つのしきい値はデフォルトでどちらも無効なため、エグゼキューターは最も確率の高い選択肢を採用します。`minProbability` または `minConfidence` を設定すると、確かさの低い操作をブロックし、完了確認を退け、アサーションを判定不能として失敗させられます。
+2 つのしきい値はデフォルトでどちらも無効なため、エグゼキューターは最も確率の高い選択肢を採用します。`minProbability` または `minConfidence` を設定すると、確かさが足りない場合に、操作をブロックし、完了確認を退け、アサーションを判定不能として失敗させられます。
 
 ```ts title="Executor setup"
 const executor = decisionExecutor({ model, minProbability: 0.9, minConfidence: 0.8 });

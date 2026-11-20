@@ -158,7 +158,7 @@ close_session {session: "<id>"}
 | [`run_code`](#run_code) | テストの文を実行します |
 | [`test_lines`](#test_lines) | セッションのテスト行を返します |
 | [`screenshot`](#screenshot) | マスキングしたビューポートを返し、必要に応じてファイルに保存します |
-| [座標ツール](#point-tools) | スクリーンショットの座標を操作します |
+| [座標ツール](#point-tools) | スクリーンショット上の座標で操作します |
 | [`start_recording`, `stop_recording`](#recording) | アプリの動画を録画します |
 | [プロジェクトのツール](#project-tools) | `defineTool` で定義したツールです |
 
@@ -322,7 +322,7 @@ call {tool: "stop_recording"}
 - セッションで録画するのは `start_recording` と `stop_recording` の間だけで、必要な回数繰り返せます。設定の [`video`](/reference/config#video) モードはテスト実行に適用し、セッションには適用しません。セッションは[トレース](/reference/config#trace)も書き込みません。
 - 録画は `<output>/videos/<session>/<n>[-<name>].webm` に保存します。モバイルでは `.mp4`、[`output`](/reference/config#output) のデフォルトは `.e2e` です。`n` はセッション内の録画番号です。
 - 再起動や状態リセットをまたぐ Web の録画は、ページごとに 1 ファイルとなり、再生順に `-part2`、`-part3` などを付けます。
-- リース自体を録画するブラウザやデバイスのプロバイダーでは、セッション全体を録画します。[Kernel](/integrations/kernel) はリプレイをダウンロードし、他のファイルと同様に `<n>[-<name>].mp4` としてここに保存します。録画を自身で保持するプロバイダーでは、ファイルの代わりに URL を示します。
+- リース自体を録画するブラウザやデバイスのプロバイダーでは、エンジンの代わりにプロバイダーがセッションを録画します。[Kernel](/integrations/kernel) はリプレイをダウンロードし、他のファイルと同様に `<n>[-<name>].mp4` としてここに保存します。録画を自身で保持するプロバイダーでは、ファイルの代わりに URL を示します。
 - `close_session`、アイドルタイムアウト、セッションの TTL では、進行中の録画を保存し、クローズ結果にファイルを列挙します。
 
 <Warning>

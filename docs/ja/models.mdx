@@ -229,7 +229,7 @@ const agent = {
 | 組み込みエージェントにモデルがない | `MODEL_UNAVAILABLE` | `agents.<name>.model` を設定します。 |
 | GitHub Copilot がそのアカウントにモデルを提供していない | `MODEL_UNAVAILABLE` | 契約プランで使える ID を選びます。[モデルを選ぶ](/subscriptions#pick-a-model)を参照してください。 |
 | 設定読み込み時にキーを読むプロバイダーで、キーがない | `CONFIG_LOAD_FAILED` | キーを設定します。 |
-| 最初のモデル呼び出しで認証に失敗する | `MODEL_PROVIDER_FAILED` | プロバイダーの API キーを確認します。サブスクリプションなら `npx e2e login` を実行します。Vercel OIDC のメッセージには `AI_GATEWAY_API_KEY` しか表示されません。`vercel login` と `.vercel/project.json` を確認してください。 |
+| 最初のモデル呼び出しで認証に失敗する | `MODEL_PROVIDER_FAILED` | プロバイダーの API キーを確認します。サブスクリプションなら `npx e2e login` を実行します。Vercel OIDC を使う場合も、メッセージには `AI_GATEWAY_API_KEY` しか表示されません。`vercel login` と `.vercel/project.json` を確認してください。 |
 | `ai` パッケージがない | `MODEL_UNAVAILABLE` | `ai` をインストールします。[ゲートウェイまたはプロバイダーを選ぶ](#pick-a-gateway-or-a-provider)を参照してください。 |
 | ステップの 2 ターン目が `Item with id 'rs_…' not found` で失敗する | `MODEL_PROVIDER_FAILED` | `providerOptions` の `store` をデフォルトどおり無効にするか、ゲートウェイ経由ではなく OpenAI を直接呼び出します。 |
 | 独自のエグゼキューター自身の `model` または `judge` が agents エントリーと異なる | `INVALID_CONFIG` | [独自のエグゼキューター](/executors#keep-the-loop-change-the-vocabulary)を参照してください。 |

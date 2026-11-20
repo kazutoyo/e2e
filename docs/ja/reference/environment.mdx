@@ -136,7 +136,7 @@ CI モードを有効にします。
 | `GITHUB_ACTIONS` | `GITHUB_ACTIONS=true` | value | 未設定の場合、レポーターは何も投稿せず、その旨を表示します |
 | `GITHUB_REPOSITORY`, `GITHUB_RUN_ID`, `GITHUB_EVENT_NAME`, `GITHUB_WORKFLOW`, `GITHUB_JOB` | `GITHUB_REPOSITORY=acme/shop` | value | GitHub Actions のランナーが常に設定します。いずれかがなければレポーターは失敗し、変数名を示します。リポジトリと実行 ID は成果物へのリンクに使います。イベント名は「プルリクエストではない」ことを示す行に表示します。ワークフローとジョブは、再実行時に自身のコメントを見つけるためのマーカーに含めます |
 | `GITHUB_TOKEN`, `GH_TOKEN` | `GITHUB_TOKEN=<token>` | value | コメントの投稿に使います。先に挙げた変数が優先されます。未設定でもジョブサマリーは書き込みます。フォークの `pull_request` トークンは読み取り専用で、投稿できません。[何も投稿されない場合](/github#when-nothing-is-posted)を参照してください |
-| `GITHUB_EVENT_PATH`, `GITHUB_REF` | `GITHUB_REF=refs/pull/42/merge` | value | イベントペイロードからプルリクエスト番号と先頭コミットを取得するか、`refs/pull/N/merge` から番号を取得します |
+| `GITHUB_EVENT_PATH`, `GITHUB_REF` | `GITHUB_REF=refs/pull/42/merge` | value | イベントペイロードからプルリクエスト番号と最新コミットを取得するか、`refs/pull/N/merge` から番号を取得します |
 | `GITHUB_SHA` | `GITHUB_SHA=<commit>` | value | イベントがプルリクエストに関するものでない場合に、ソースへのリンクが指すコミットです |
 | `GITHUB_WORKSPACE` | `GITHUB_WORKSPACE=/home/runner/work/shop/shop` | value | チェックアウトのルートです。ソースへのリンクには、その中のプロジェクトのパスを加えるため、サブディレクトリのテストスイートでも正しいファイルにリンクできます |
 | `GITHUB_SERVER_URL`, `GITHUB_API_URL` | `GITHUB_SERVER_URL=https://github.example.com` | value | Enterprise Server 向けの GitHub ホストです。デフォルトは `https://github.com` と `https://api.github.com` です |

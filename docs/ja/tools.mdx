@@ -97,7 +97,7 @@ const captureEvidence = defineTool(
 
 ## ノードの計算済みスタイルを読む
 
-読み取り専用ツール内で `context.read` を使うと、Web エンジンが列挙したノードの描画スタイルを取得できます。
+Web エンジンでは、読み取り専用ツール内で `context.read` を使うと、ツリーに載っているノードの描画スタイルを取得できます。
 
 ```ts
 const context = getToolContext(executionOptions);
