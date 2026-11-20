@@ -40,32 +40,48 @@ test.describe('sign-in form', () => {
   });
 
   test('takes a screenshot of the window with the password field painted over', async ({ app, screen }) => {
-    await screen.getByRole('textbox', 'Password').fill(credentials.user('ada').password);
+    const password = screen.getByRole('textbox', 'Password');
+    await screen.getByRole('textbox', 'Username').fill('ada');
+    await password.fill(credentials.user('ada').password);
+    const field = await password.boundingBox();
+    const beside = await screen.getByRole('textbox', 'Username').boundingBox();
+    expect(field).not.toBeNull();
+    expect(beside).not.toBeNull();
     const file = await app.screenshot('filled');
-    // The window is 420 points wide and the password field 262 by 26: its mask is a solid black block that size at the capture's scale; an unmasked window has none.
-    const png = new Uint8Array(readFileSync(file));
-    const scale = new Transformer(png).metadataSync().width / 420;
-    expect(tallestBlackBlock(png, Math.floor(262 * scale))).toBeGreaterThanOrEqual(Math.floor(26 * scale));
+    // The window is 420 points wide: the capture's width over that is its scale.
+    const image = decode(new Uint8Array(readFileSync(file)));
+    const scale = image.width / 420;
+    // The password field's own box is painted black, and the username field beside it keeps its pixels.
+    expect(blackShare(image, field!, scale)).toBe(1);
+    expect(blackShare(image, beside!, scale)).toBeLessThan(0.5);
   });
 });
 
-/** The most consecutive rows of a PNG that each hold a run of at least `width` opaque black pixels: the height of a mask that wide. */
-function tallestBlackBlock(png: Uint8Array, width: number): number {
+/** A decoded capture: its width and its RGBA pixels, rows top to bottom. */
+interface Image {
+  readonly width: number;
+  readonly pixels: Uint8Array;
+}
+
+function decode(png: Uint8Array): Image {
   const transformer = new Transformer(png);
-  const { width: columns } = transformer.metadataSync();
-  const pixels = transformer.rawPixelsSync();
-  let tallest = 0;
-  let height = 0;
-  for (let row = 0; row * columns * 4 < pixels.length; row += 1) {
-    let run = 0;
-    let longest = 0;
-    for (let column = 0; column < columns; column += 1) {
-      const at = (row * columns + column) * 4;
-      run = pixels[at] === 0 && pixels[at + 1] === 0 && pixels[at + 2] === 0 && pixels[at + 3] === 255 ? run + 1 : 0;
-      longest = Math.max(longest, run);
+  return { width: transformer.metadataSync().width, pixels: transformer.rawPixelsSync() };
+}
+
+/** The share of opaque black pixels inside a box given in window points, a pixel in from each edge so rounding never reaches outside it. */
+function blackShare(image: Image, box: { x: number; y: number; width: number; height: number }, scale: number): number {
+  const left = Math.ceil(box.x * scale) + 1;
+  const top = Math.ceil(box.y * scale) + 1;
+  const right = Math.floor((box.x + box.width) * scale) - 1;
+  const bottom = Math.floor((box.y + box.height) * scale) - 1;
+  let black = 0;
+  let total = 0;
+  for (let row = top; row < bottom; row += 1) {
+    for (let column = left; column < right; column += 1) {
+      const at = (row * image.width + column) * 4;
+      total += 1;
+      if (image.pixels[at] === 0 && image.pixels[at + 1] === 0 && image.pixels[at + 2] === 0 && image.pixels[at + 3] === 255) black += 1;
     }
-    height = longest >= width ? height + 1 : 0;
-    tallest = Math.max(tallest, height);
   }
-  return tallest;
+  return total === 0 ? 0 : black / total;
 }

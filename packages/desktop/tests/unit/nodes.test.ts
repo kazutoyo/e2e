@@ -54,9 +54,28 @@ describe('projectSnapshot', () => {
     const { root } = project('macos/sign-in-form');
     const nodes = all(root);
     expect(nodes.filter((node) => node.role === 'group' && node.name === undefined)).toEqual([]);
-    expect(nodes.find((node) => node.role === 'button' && node.name === 'Full Screen')?.children).toBeUndefined();
     expect(byTestId(root, 'username')).toMatchObject({ role: 'textbox', name: 'Username' });
     expect(byTestId(root, 'password')).toMatchObject({ inputPurpose: 'password', states: { secure: true } });
+  });
+
+  it("leaves out the window's own title-bar buttons, and keeps the app's", () => {
+    const { root } = project('macos/sign-in-form');
+    expect(all(root).filter((node) => node.role === 'button').map((node) => node.name)).toEqual(['Sign in']);
+    const own = projectSnapshot(
+      {
+        snapshot_id: 's',
+        tree: {
+          role: 'window',
+          name: 'W',
+          children: [
+            { role: 'button', name: 'Close', native_id: { kind: 'ax_identifier', value: 'close' }, ref_id: '@s:e1' },
+            { role: 'group', name: 'Toolbar', children: [{ role: 'button', name: 'Close', ref_id: '@s:e2' }] },
+          ],
+        },
+      },
+      minter(),
+    );
+    expect(all(own.root).filter((node) => node.role === 'button' && node.name === 'Close')).toHaveLength(2);
   });
 
   it('answers role and test-id queries through the shared resolver', () => {

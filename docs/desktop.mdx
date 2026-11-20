@@ -9,8 +9,9 @@ the app through the OS accessibility tree with
 same `agent`, `screen`, and `expect` APIs as browser tests.
 
 <Note>
-  The desktop engine is a prototype. It is tested on macOS. Windows and Linux
-  use the same commands, but they are not tested yet.
+  The desktop engine is a prototype, and it runs on macOS only. A config with
+  a desktop target still loads on Windows and Linux, so its other targets run
+  there, but the desktop target fails to start.
 </Note>
 
 ## Set up
@@ -66,6 +67,12 @@ Set the target's `app.appPath` to a built `.app` bundle. Or set
 `com.apple.TextEdit`. With both, the `appPath` build is launched, and its
 bundle id must be `bundleId`. `app.launchArguments` go to every launch.
 
+The app gets only these variables of the run's environment: `HOME`, `USER`,
+`LOGNAME`, `SHELL`, `PATH`, `TMPDIR`, `LANG`, `LC_*`, and
+`__CF_USER_TEXT_ENCODING`. Secrets, model keys, and CI tokens in the
+environment never reach it. The engine also sets `E2E_DESKTOP_LAUNCH`, a
+token it uses to find the copy it launched.
+
 ```ts title="e2e.config.ts"
 import type { E2EConfig } from 'e2e';
 import { desktop } from '@e2e-dev/desktop';
@@ -86,10 +93,11 @@ export default {
 
 ## Write a test
 
-Import `test` from `@e2e-dev/desktop`. `app.open()` launches the app. When
-the engine launched it before, it quits that copy first. A copy you opened
-yourself is left alone, and the engine never reads or drives it. Every test
-ends with the app quit.
+Import `test` from `@e2e-dev/desktop`. `app.open()` launches the app in the
+background, so it does not take your keyboard. When the engine launched it
+before, it quits that copy first. A copy you opened yourself is left alone,
+and the engine never reads or drives it. Every test ends with the app quit,
+and no window the app saved at its last quit comes back.
 
 ```ts title="tests/sign-in.e2e.ts"
 import { test } from '@e2e-dev/desktop';
@@ -107,24 +115,36 @@ test('signs in', async ({ app, screen }) => {
 ```
 
 Roles use the names the web uses: `textbox`, `checkbox`, `combobox`,
-`button`. Static text has the role `text`, so find it with `getByText`.
-`getByTestId` finds the developer id, which is `AXIdentifier` on macOS.
+`button`. Static text has the role `text`, so find it with `getByText`. A
+control's name is the one macOS accessibility gives it: its title, or its
+accessibility label. Text inside a button is only in the button's name, so
+find the button with `getByRole`, not `getByText`. `getByTestId` finds the
+control's `AXIdentifier` (`accessibilityIdentifier` in AppKit, SwiftUI's
+`.accessibilityIdentifier`).
 
-The `desktop` fixture lists the app's windows (`desktop.windows()`) and
-quits the app (`desktop.closeApp()`).
+The `desktop` fixture lists the app's windows (`desktop.windows()`), picks
+the one `screen` reads (`desktop.useWindow(window)`), and quits the app
+(`desktop.closeApp()`).
 
 ## What differs from the web
 
 | Area | On a desktop target |
 | --- | --- |
-| Input | `app.open()` brings the app forward. Actions after it use the accessibility API, so your pointer and focus stay where they are |
-| Physical input | `doubleTap`, `hover`, point taps, and typing into whatever has focus need `desktop({ headed: true })`, which uses the real pointer and keyboard |
+| Input | The app runs in the background, and actions use the accessibility API, so your pointer, focus, and typing stay where they are. An app that opens no window in the background, such as a document-based one, is brought forward once |
+| Physical input | `doubleTap`, `hover`, point taps, and typing into whatever has focus need `desktop({ headed: true })`, which brings the app forward and uses the real pointer and keyboard |
+| Keys | `press` on a control sends the key only while that control has focus, in the window the app sends keys to |
 | Select | `selectOption` takes an option's label, not an index |
+| Windows | `screen` reads one window of the app: the one `desktop.useWindow()` picked, else the focused one, else the first visible one. Sheets are part of their window. The window's own Close, Minimize, and Zoom buttons are left out |
+| Menu bar | The app's menu bar cannot be read yet. Use a key shortcut with `press` |
+| Web content | Text in a browser window, an Electron app, or a web view is not supported. Test web apps with `@e2e-dev/web` |
 | Workers | One per target, because its workers would share one screen. Two desktop targets can still run at the same time: with `headed: true`, set `workers: 1` in the config |
 | State | `app.clearState()` is not supported |
 | Secrets | A password field shows no value, and screenshots paint it black |
 
-A screenshot that cannot cover a password field is not saved.
+A screenshot that cannot cover a password field is not saved. agent-desktop
+keeps the text of other fields in each worker's private state directory. The
+engine removes it when the worker ends, and the next run removes one a
+killed worker left behind.
 
 ## Options
 

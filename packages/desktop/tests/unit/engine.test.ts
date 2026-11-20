@@ -31,11 +31,14 @@ describe('desktop()', () => {
     expect(check({})).toThrow(expect.objectContaining({ code: 'INVALID_CONFIG' }));
     expect(check({ bundleId: 'com.example.app', permissions: { camera: 'grant' } })).toThrow(expect.objectContaining({ code: 'INVALID_CONFIG' }));
     expect(check({ bundleId: 'com.example.app' })).not.toThrow();
-    if (process.platform === 'darwin') {
-      expect(check({ appPath: 'build/App.zip' })).toThrow(expect.objectContaining({ code: 'INVALID_CONFIG' }));
-      expect(check({ appPath: 'build/App.app' })).not.toThrow();
-    } else {
-      expect(check({ appPath: 'build/App.app' })).toThrow(expect.objectContaining({ code: 'INVALID_CONFIG' }));
-    }
+    expect(check({ appPath: 'build/App.zip' })).toThrow(expect.objectContaining({ code: 'INVALID_CONFIG' }));
+    expect(check({ appPath: 'build/App.app' })).not.toThrow();
+  });
+
+  it.skipIf(process.platform === 'darwin')('loads anywhere, and refuses to start a target on any OS but macOS', async () => {
+    const engine = desktop();
+    expect(engine.platform).toBe('macos');
+    await expect(Promise.resolve().then(() => engine.prepare?.({} as never))).rejects.toMatchObject({ code: 'INVALID_CONFIG' });
+    await expect(Promise.resolve().then(() => engine.init?.({} as never))).rejects.toMatchObject({ code: 'INVALID_CONFIG' });
   });
 });

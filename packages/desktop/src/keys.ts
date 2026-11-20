@@ -1,11 +1,10 @@
 /** The contract's `press` grammar spelled as an agent-desktop key combo. */
 
 import { EngineError, parseKey, type KeyModifier, type KeyName } from '@e2e-dev/core/engine';
-import type { DesktopPlatform } from './options.ts';
 
 /**
  * agent-desktop's name for each contract key. Its `delete` is the key that
- * deletes backwards on every OS, as a Mac labels it, so the forward Delete is
+ * deletes backwards, as a Mac labels it, so the forward Delete is
  * `forwarddelete`. Insert has no key on a Mac keyboard and no name there.
  */
 const KEY_NAMES: Readonly<Record<KeyName, string | undefined>> = {
@@ -38,7 +37,7 @@ const KEY_NAMES: Readonly<Record<KeyName, string | undefined>> = {
   F12: 'f12',
 };
 
-function modifierName(modifier: KeyModifier, platform: DesktopPlatform): string {
+function modifierName(modifier: KeyModifier): string {
   switch (modifier) {
     case 'Shift':
       return 'shift';
@@ -47,19 +46,18 @@ function modifierName(modifier: KeyModifier, platform: DesktopPlatform): string 
     case 'Alt':
       return 'alt';
     case 'Meta':
-      return 'cmd';
     case 'ControlOrMeta':
-      return platform === 'macos' ? 'cmd' : 'ctrl';
+      return 'cmd';
   }
 }
 
 /**
  * The combo agent-desktop's `press` takes for one contract key: `Enter` is
- * `return`, `ControlOrMeta+a` is `cmd+a` on a Mac and `ctrl+a` elsewhere.
+ * `return`, `ControlOrMeta+a` is `cmd+a`.
  * A key agent-desktop has no name for is `UNSUPPORTED_CAPABILITY`, and so is
  * `+`, which its combo syntax uses as the separator.
  */
-export function toCombo(key: string, platform: DesktopPlatform): string {
+export function toCombo(key: string): string {
   const parsed = parseKey(key);
   if (parsed === undefined) throw new EngineError('UNSUPPORTED_CAPABILITY', `"${key}" is not a key in the press grammar`, { retryable: false });
   let name: string | undefined;
@@ -72,9 +70,9 @@ export function toCombo(key: string, platform: DesktopPlatform): string {
     name = parsed.key.char;
   }
   if (name === undefined) {
-    throw new EngineError('UNSUPPORTED_CAPABILITY', `agent-desktop cannot press "${key}" on ${platform}`, { retryable: false });
+    throw new EngineError('UNSUPPORTED_CAPABILITY', `agent-desktop cannot press "${key}" on macOS`, { retryable: false });
   }
-  const modifiers = parsed.modifiers.map((modifier) => modifierName(modifier, platform));
+  const modifiers = parsed.modifiers.map(modifierName);
   // A capital letter with other modifiers loses its case in agent-desktop's combo, so Shift says it.
   if (parsed.key.kind === 'char' && /^[A-Z]$/.test(parsed.key.char) && modifiers.length > 0 && !modifiers.includes('shift')) modifiers.push('shift');
   return [...modifiers, name].join('+');

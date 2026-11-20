@@ -62,6 +62,8 @@ export interface NodeBinding {
   readonly windowId?: string;
   /** The node's box in the window, which finds it again where its id cannot (a look-alike's). */
   readonly rect?: Rect;
+  /** Whether the id comes from the node's identity, and so names it in the next snapshot too; a look-alike's is new in every snapshot. */
+  readonly stable: boolean;
 }
 
 /** A snapshot as the engine keeps it: the tree the harness sees, and a binding for every node in it. */
@@ -174,6 +176,19 @@ function label(value: string | undefined): string | undefined {
   return value === undefined || value.trim() === '' ? undefined : value;
 }
 
+/** The names macOS gives a window's title-bar buttons, which have no title of their own. */
+const WINDOW_CONTROLS = new Set(['Close', 'Minimize', 'Zoom', 'Full Screen']);
+
+/**
+ * A window's own title-bar button: a button straight under the window, with
+ * no developer id, named only for what it does to the window. Left out, so
+ * `getByRole('button', 'Close')` finds the app's Close button and not the
+ * window's.
+ */
+function windowControl(raw: RawNode): boolean {
+  return raw.role === 'button' && raw.native_id === undefined && raw.name !== undefined && WINDOW_CONTROLS.has(raw.name) && label(raw.value) === undefined && label(raw.description) === undefined;
+}
+
 /** A node agent-desktop reports but nothing reads: a wrapper with no name, value, id, ref, or text of its own. */
 function transparent(raw: RawNode): boolean {
   // A secure node is never dropped: its bounds are what a screenshot masks.
@@ -209,7 +224,7 @@ function identityOf(node: RawNode, named = false): string {
  * The window is always `root`.
  * Wrappers nothing reads (anonymous groups) are dropped
  * and their children lifted, so the model reads the controls, not the
- * scaffolding.
+ * scaffolding, and the window's title-bar buttons are left out.
  */
 export function projectSnapshot(raw: RawSnapshot, idFor: (identity: string | undefined) => string): ProjectedScreen {
   const window = raw.tree.bounds ?? { x: 0, y: 0, width: 0, height: 0 };
@@ -218,7 +233,7 @@ export function projectSnapshot(raw: RawSnapshot, idFor: (identity: string | und
   let unmaskable = false;
   let scrollTarget: string | undefined;
 
-  const project = (node: RawNode, id: string): SemanticNode => {
+  const project = (node: RawNode, id: string, stable: boolean): SemanticNode => {
     const rawStates = new Set(node.states ?? []);
     const role = ROLE_MAP[node.role] ?? (node.role === 'unknown' ? undefined : node.role);
     const secure = rawStates.has('secure');
@@ -261,13 +276,14 @@ export function projectSnapshot(raw: RawSnapshot, idFor: (identity: string | und
       actions: node.available_actions ?? [],
       ...(raw.window === undefined ? {} : { windowId: raw.window.id }),
       ...(rect === undefined ? {} : { rect }),
+      stable,
     });
     const kept: RawNode[] = [];
     const collect = (child: RawNode): void => {
       if (transparent(child)) for (const grandchild of child.children ?? []) collect(grandchild);
       else kept.push(child);
     };
-    for (const child of node.children ?? []) collect(child);
+    for (const child of node.children ?? []) if (id !== ROOT_ID || !windowControl(child)) collect(child);
     const tally = (named: boolean): Map<string, number> => {
       const counts = new Map<string, number>();
       for (const child of kept) counts.set(identityOf(child, named), (counts.get(identityOf(child, named)) ?? 0) + 1);
@@ -281,7 +297,7 @@ export function projectSnapshot(raw: RawSnapshot, idFor: (identity: string | und
     // look-alike gets a new id every snapshot.
     const children = kept.map((child) => {
       const identity = plain.get(identityOf(child)) === 1 ? identityOf(child) : named.get(identityOf(child, true)) === 1 ? identityOf(child, true) : undefined;
-      return project(child, idFor(identity === undefined ? undefined : `${id}/${identity}`));
+      return project(child, idFor(identity === undefined ? undefined : `${id}/${identity}`), identity !== undefined);
     });
     return {
       ref: { id, revision: '' },
@@ -299,7 +315,7 @@ export function projectSnapshot(raw: RawSnapshot, idFor: (identity: string | und
     };
   };
 
-  const root = project(raw.tree, ROOT_ID);
+  const root = project(raw.tree, ROOT_ID, true);
   return {
     root,
     bindings,

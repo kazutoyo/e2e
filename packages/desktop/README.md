@@ -1,16 +1,15 @@
 # @e2e-dev/desktop
 
 The desktop engine for [`e2e`](https://www.npmjs.com/package/e2e), built on
-[agent-desktop](https://github.com/vercel-labs/agent-desktop): native apps,
-read and driven through the OS accessibility tree (AX on macOS, UI
-Automation on Windows, AT-SPI on Linux), through the same
+[agent-desktop](https://github.com/vercel-labs/agent-desktop): native macOS
+apps, read and driven through the accessibility tree, through the same
 `@e2e-dev/core/engine` contract the browser and mobile engines implement. A
 test written against `screen`, `expect`, `app`, and `agent` runs on a desktop
 target unchanged.
 
 > [!NOTE]
-> This is a prototype. macOS is the platform it is tested on; Windows and
-> Linux run through the same commands but are not tested yet.
+> This is a prototype, and it runs on macOS only. A config with a desktop
+> target still loads elsewhere, but the target fails to start.
 
 ## Install
 
@@ -53,19 +52,25 @@ test('signs in', async ({ app, screen }) => {
 
 ## How it works
 
-- `app.open()` launches the app fresh, after quitting the copy the engine
-  launched before. A copy you opened yourself is never read, driven, or quit.
-  Every test ends with the app quit.
+- `app.open()` launches the app fresh, in the background, after quitting the
+  copy the engine launched before. A copy you opened yourself is never read,
+  driven, or quit. Every test ends with the app quit.
+- The app gets only `HOME`, `USER`, `LOGNAME`, `SHELL`, `PATH`, `TMPDIR`,
+  `LANG`, `LC_*`, and `__CF_USER_TEXT_ENCODING` of the run's environment, and
+  `E2E_DESKTOP_LAUNCH`, the token the engine finds its copy by.
 - An observation is one agent-desktop snapshot of the app's window. Roles map
   onto the ARIA names other engines use (`textbox`, `checkbox`, `combobox`,
-  `button`); the developer id (`AXIdentifier`, `AutomationId`) is the node's test
-  id, so `getByTestId` finds it.
-- `app.open()` brings the app forward. Actions after it go through the
-  accessibility API and leave your pointer and focus alone. `desktop({ headed: true })` allows physical input: `doubleTap`,
-  `hover`, point-addressed taps, and typing into whatever has focus.
+  `button`); the developer id (`AXIdentifier`) is the node's test id, so
+  `getByTestId` finds it.
+- Actions go through the accessibility API and leave your pointer, focus, and
+  typing alone. `desktop({ headed: true })` brings the app forward and allows
+  physical input: `doubleTap`, `hover`, point-addressed taps, and typing into
+  whatever has focus.
 - A fill sends the text to agent-desktop on stdin, never in its arguments.
   A secure field reports no value, and screenshots paint over its bounds; when
   a secure field has no bounds, the screenshot is withheld.
+- Not supported yet: the menu bar, and web content (a browser window, an
+  Electron app, a web view).
 - One worker per target: its workers would share one screen. Two desktop
   targets can still run at the same time; with `headed: true`, set the run's
   `workers: 1`.

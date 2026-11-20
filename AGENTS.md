@@ -140,8 +140,10 @@ suites that consume the built packages the way a user would.
   engine's `prepare` downloads the pinned release and checks its SHA-256
   (`src/binary.ts`), and every command runs as one CLI process with a private
   `AGENT_DESKTOP_HOME` per worker (`src/cli.ts`). Text a fill types goes on
-  stdin, never in the arguments. A prototype: macOS is tested, Windows and
-  Linux are not yet.
+  stdin, never in the arguments, and agent-desktop and the app it launches get
+  only a few variables of the run's environment (`INHERITED_ENV` in
+  `src/surface.ts`). A prototype that runs on macOS only: `prepare` and
+  `init` refuse any other OS.
 - `packages/core/src/engine/protocol/` - the engine protocol: the engine
   contract as LSP-style JSON-RPC (`connectEngine` client, `serveEngine`
   server, spawn/socket/loopback transports), so an engine can run in

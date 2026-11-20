@@ -6,8 +6,8 @@
 
 import { ConfigurationError, rejectUnknownKeys } from '@e2e-dev/core/engine';
 
-/** The desktop operating systems agent-desktop drives, as the engine's platform label. */
-export type DesktopPlatform = 'macos' | 'windows' | 'linux';
+/** The desktop operating system the engine drives, as its platform label: macOS only for now. */
+export type DesktopPlatform = 'macos';
 
 /**
  * Options of the desktop engine. Every optional value also accepts
@@ -83,16 +83,14 @@ export function resolveOptions(options: DesktopOptions | undefined): ResolvedDes
   };
 }
 
-/** The platform label of the machine the engine runs on; another OS cannot be driven at all. */
-export function hostPlatform(): DesktopPlatform | undefined {
-  switch (process.platform) {
-    case 'darwin':
-      return 'macos';
-    case 'win32':
-      return 'windows';
-    case 'linux':
-      return 'linux';
-    default:
-      return undefined;
+/**
+ * Fails on any OS but macOS. agent-desktop also runs on Windows and Linux,
+ * but there some of the engine's actions need physical input and secure
+ * fields are not always reported, so the engine refuses them until they are
+ * tested.
+ */
+export function requireMacOS(): void {
+  if (process.platform !== 'darwin') {
+    throw new ConfigurationError('INVALID_CONFIG', `desktop() drives macOS apps only for now; this machine runs ${process.platform}`);
   }
 }

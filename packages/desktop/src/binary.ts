@@ -7,8 +7,8 @@
 
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { constants, existsSync } from 'node:fs';
-import { access, chmod, mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { access, chmod, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -50,6 +50,26 @@ function executableName(): string {
   return process.platform === 'win32' ? 'agent-desktop.exe' : 'agent-desktop';
 }
 
+/** The file an unpacked release is stamped with once its archive's digest checked out: the digest itself. */
+const STAMP = '.verified';
+
+/**
+ * Whether the cache entry is a whole, checked release: stamped with the
+ * pinned digest, its executable still executable, and on macOS the helper
+ * beside it. An entry that is not (cut short, its execute bit lost, the
+ * helper deleted) is downloaded again.
+ */
+async function usable(directory: string, digest: string): Promise<boolean> {
+  try {
+    if ((await readFile(path.join(directory, STAMP), 'utf8')).trim() !== digest) return false;
+    await access(path.join(directory, executableName()), constants.X_OK);
+    if (process.platform === 'darwin') await access(path.join(directory, 'agent-desktop-macos-helper'), constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * The per-user cache the pinned release unpacks into, under the OS's cache
  * directory: `~/Library/Caches/e2e` on macOS, `%LOCALAPPDATA%\\e2e\\cache` on
@@ -88,19 +108,22 @@ export async function resolveExecutable(binary: string | undefined, projectRoot:
     }
     return resolved;
   }
-  const pinned = pinnedExecutable(env);
-  if (pinned === undefined) {
+  const target = releaseTarget();
+  const digest = target === undefined ? undefined : ARCHIVE_DIGESTS[target];
+  if (target === undefined || digest === undefined) {
     throw new ConfigurationError('INVALID_CONFIG', `agent-desktop has no release for ${process.platform} on ${process.arch}; pass desktop({ binary }) to use a build of your own`);
   }
-  if (!existsSync(pinned)) {
-    throw new InfrastructureError('AGENT_DESKTOP_INSTALL_FAILED', `agent-desktop ${AGENT_DESKTOP_VERSION} is not installed at ${pinned}; the engine's prepare step downloads it before the first test`);
+  const directory = cacheDirectory(env, target);
+  if (!(await usable(directory, digest))) {
+    throw new InfrastructureError('AGENT_DESKTOP_INSTALL_FAILED', `agent-desktop ${AGENT_DESKTOP_VERSION} is not installed whole at ${directory}; the engine's prepare step downloads it before the first test`);
   }
-  return pinned;
+  return path.join(directory, executableName());
 }
 
 /**
- * Downloads and unpacks the pinned release unless it is already in the
- * cache. Any failure but a cancellation is `AGENT_DESKTOP_INSTALL_FAILED`.
+ * Downloads and unpacks the pinned release unless a whole, checked copy is
+ * already in the cache; a damaged one is replaced. Any failure but a
+ * cancellation is `AGENT_DESKTOP_INSTALL_FAILED`.
  */
 export async function installPinned(env: Readonly<Record<string, string | undefined>>, signal: AbortSignal, log: (line: string) => void): Promise<string> {
   const target = releaseTarget();
@@ -110,12 +133,13 @@ export async function installPinned(env: Readonly<Record<string, string | undefi
   }
   const directory = cacheDirectory(env, target);
   const executable = path.join(directory, executableName());
-  if (existsSync(executable)) return executable;
+  if (await usable(directory, digest)) return executable;
   const archive = `agent-desktop-v${AGENT_DESKTOP_VERSION}-${target}.tar.gz`;
   const url = `https://github.com/vercel-labs/agent-desktop/releases/download/v${AGENT_DESKTOP_VERSION}/${archive}`;
   log(`downloading agent-desktop ${AGENT_DESKTOP_VERSION} (${target})`);
   try {
-    await download(url, archive, digest, directory, executable, signal);
+    await rm(directory, { recursive: true, force: true });
+    await download(url, archive, digest, directory, signal);
   } catch (cause) {
     if (cause instanceof InfrastructureError || signal.aborted) throw cause;
     throw new InfrastructureError('AGENT_DESKTOP_INSTALL_FAILED', `installing agent-desktop from ${url} failed: ${(cause as Error).message}`, { cause });
@@ -125,11 +149,11 @@ export async function installPinned(env: Readonly<Record<string, string | undefi
 
 /**
  * Fetches the archive, checks its digest before anything is unpacked, and
- * unpacks it by the OS's `tar` into a fresh directory that replaces the cache
+ * unpacks it by the OS's `tar` into a fresh directory that becomes the cache
  * entry in one rename, so a download cut short never leaves a half-written
  * executable behind.
  */
-async function download(url: string, archive: string, digest: string, directory: string, executable: string, signal: AbortSignal): Promise<void> {
+async function download(url: string, archive: string, digest: string, directory: string, signal: AbortSignal): Promise<void> {
   const response = await fetch(url, { signal });
   if (!response.ok) throw new InfrastructureError('AGENT_DESKTOP_INSTALL_FAILED', `downloading ${url} failed: HTTP ${response.status}`);
   const bytes = new Uint8Array(await response.arrayBuffer());
@@ -145,11 +169,13 @@ async function download(url: string, archive: string, digest: string, directory:
     await execFileAsync('tar', ['-xzf', file, '-C', staging], { signal });
     await rm(file);
     if (process.platform !== 'win32') await chmod(path.join(staging, executableName()), 0o755);
+    // Written last, so only a whole, checked unpack is ever stamped.
+    await writeFile(path.join(staging, STAMP), digest);
     try {
       await rename(staging, directory);
     } catch (cause) {
       // Another run unpacked the same release first; its copy is as good as ours.
-      if (!existsSync(executable)) throw cause;
+      if (!(await usable(directory, digest))) throw cause;
     }
   } finally {
     await rm(staging, { recursive: true, force: true });

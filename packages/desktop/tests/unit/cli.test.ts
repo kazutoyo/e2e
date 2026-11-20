@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { AgentDesktopCli, AgentDesktopFailure, translate } from '../../src/cli.ts';
-import { FAKE_BINARY, cleanupFakes, failure, fakeScenario } from '../helpers/fake.ts';
+import { cleanupFakes, failure, fakeScenario } from '../helpers/fake.ts';
 
 afterEach(cleanupFakes);
 
@@ -9,7 +9,7 @@ const call = { input: true, signal: new AbortController().signal, timeoutMs: 10_
 describe('AgentDesktopCli', () => {
   it('returns the envelope data and hands text over on stdin, never in the arguments', async () => {
     const fake = fakeScenario({ 'set-value': [{ ok: true, data: { action: 'set-value' } }] });
-    const cli = new AgentDesktopCli(FAKE_BINARY, fake.env);
+    const cli = new AgentDesktopCli(fake.binary, fake.env);
     await expect(cli.run({ ...call, args: ['set-value', '@s1:e2', '--stdin'], stdin: 'hunter2' })).resolves.toEqual({ action: 'set-value' });
     const [sent] = fake.calls();
     expect(sent?.stdin).toBe('hunter2');
@@ -18,7 +18,7 @@ describe('AgentDesktopCli', () => {
 
   it('throws the failure agent-desktop reported, untranslated', async () => {
     const fake = fakeScenario({ click: [failure('STALE_REF', 'not_delivered')] });
-    const cli = new AgentDesktopCli(FAKE_BINARY, fake.env);
+    const cli = new AgentDesktopCli(fake.binary, fake.env);
     const error = await cli.run({ ...call, args: ['click', '@s1:e1'] }).catch((cause: unknown) => cause);
     expect(error).toBeInstanceOf(AgentDesktopFailure);
     expect(error).toMatchObject({ code: 'STALE_REF', notDelivered: true });
@@ -26,27 +26,27 @@ describe('AgentDesktopCli', () => {
 
   it('reports an input cut off by the budget as possibly committed, and a read as timed out', async () => {
     const fake = fakeScenario({ click: [{ ok: true, data: {}, sleepMs: 5_000 }], snapshot: [{ ok: true, data: {}, sleepMs: 5_000 }] });
-    const cli = new AgentDesktopCli(FAKE_BINARY, fake.env);
+    const cli = new AgentDesktopCli(fake.binary, fake.env);
     await expect(cli.run({ ...call, args: ['click', '@s1:e1'], timeoutMs: 600 })).rejects.toMatchObject({ code: 'ACTION_MAY_HAVE_COMMITTED' });
     await expect(cli.run({ ...call, input: false, args: ['snapshot'], timeoutMs: 600 })).rejects.toMatchObject({ code: 'OPERATION_TIMEOUT' });
   });
 
   it('reports an input whose process printed no result as possibly committed', async () => {
     const fake = fakeScenario({ click: [{ noEnvelope: true }], snapshot: [{ noEnvelope: true }] });
-    const cli = new AgentDesktopCli(FAKE_BINARY, fake.env);
+    const cli = new AgentDesktopCli(fake.binary, fake.env);
     await expect(cli.run({ ...call, args: ['click', '@s1:e1'] })).rejects.toMatchObject({ code: 'ACTION_MAY_HAVE_COMMITTED' });
     await expect(cli.run({ ...call, input: false, args: ['snapshot'] })).rejects.toMatchObject({ code: 'ENGINE_FAILURE' });
   });
 
   it('gives a read exactly its budget, with no floor', async () => {
     const fake = fakeScenario({ snapshot: [{ ok: true, data: {}, sleepMs: 400 }] });
-    const cli = new AgentDesktopCli(FAKE_BINARY, fake.env);
+    const cli = new AgentDesktopCli(fake.binary, fake.env);
     await expect(cli.run({ ...call, input: false, args: ['snapshot'], timeoutMs: 100 })).rejects.toMatchObject({ code: 'OPERATION_TIMEOUT' });
   });
 
   it('cancels with the signal', async () => {
     const fake = fakeScenario({ click: [{ ok: true, data: {}, sleepMs: 5_000 }] });
-    const cli = new AgentDesktopCli(FAKE_BINARY, fake.env);
+    const cli = new AgentDesktopCli(fake.binary, fake.env);
     const controller = new AbortController();
     const pending = cli.run({ ...call, signal: controller.signal, args: ['click', '@s1:e1'] });
     setTimeout(() => controller.abort(), 200);

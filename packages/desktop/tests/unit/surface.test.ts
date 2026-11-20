@@ -1,18 +1,15 @@
-import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { OperationContext } from '@e2e-dev/core/engine';
 import { afterEach, describe, expect, it } from 'vitest';
 import { resolveOptions } from '../../src/options.ts';
-import { hostPlatform } from '../../src/options.ts';
 import { DesktopSurface } from '../../src/surface.ts';
-import { FAKE_BINARY, cleanupFakes, failure, fakeScenario, snapshotAnswer, type Scenario } from '../helpers/fake.ts';
+import { cleanupFakes, failure, fakeScenario, snapshotAnswer, type Scenario } from '../helpers/fake.ts';
 
 const signal = new AbortController().signal;
 
-/** The OS these tests run on: the launch token is read the way this OS reads a process's environment. */
-const HOST = hostPlatform() ?? 'linux';
 const children: ChildProcess[] = [];
 const fakes: { spawned: () => number[] }[] = [];
 const surfaces: DesktopSurface[] = [];
@@ -22,6 +19,7 @@ afterEach(async () => {
   for (const surface of surfaces.splice(0)) await surface.dispose({ signal, timeoutMs: 2_000 }).catch(() => undefined);
   for (const child of children.splice(0)) child.kill('SIGKILL');
   cleanupFakes();
+  for (const directory of artifactDirs.splice(0)) rmSync(directory, { recursive: true, force: true });
   for (const fake of fakes.splice(0)) {
     for (const pid of fake.spawned()) {
       try {
@@ -32,6 +30,15 @@ afterEach(async () => {
     }
   }
 });
+
+/** The artifact directories attempts were given, removed after each test. */
+const artifactDirs: string[] = [];
+
+function artifacts(): string {
+  const directory = mkdtempSync(path.join(tmpdir(), 'e2e-desktop-artifacts-'));
+  artifactDirs.push(directory);
+  return directory;
+}
 
 /** A surface disposed after the test, so its state directory is removed. */
 function tracked(surface: DesktopSurface): DesktopSurface {
@@ -65,6 +72,19 @@ function otherCopy(): number {
   const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)']);
   children.push(child);
   return child.pid!;
+}
+
+/** A real process with no environment at all, which `ps -E` shows as it shows a restricted app's: unreadable. */
+function unreadableCopy(): number {
+  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'], { env: {} });
+  children.push(child);
+  return child.pid!;
+}
+
+/** A process's environment as text, read the way the engine reads it. */
+async function environmentOf(pid: number): Promise<string> {
+  if (process.platform === 'linux') return readFileSync(`/proc/${pid}/environ`, 'utf8').replaceAll('\0', ' ');
+  return execFileSync('ps', ['-E', '-p', String(pid), '-o', 'command='], { encoding: 'utf8' });
 }
 
 /** A snapshot fixture's answer with its refs and window renamed, as a later snapshot of the same window reports it. */
@@ -102,14 +122,15 @@ async function initialized(scenario: Scenario | ((pid: number) => Scenario), { s
       return pid;
     },
   };
-  const surface = new DesktopSurface(resolveOptions({ binary: FAKE_BINARY, settle: false, ...options }), HOST);
+  const surface = new DesktopSurface(resolveOptions({ binary: fake.binary, settle: false, ...options }), 'macos');
   surfaces.push(surface);
   await surface.init({
     runId: 'run',
     targetName: 'macos',
     projectRoot: process.cwd(),
     app: { bundleId: 'dev.e2e.spike.form' },
-    env: fake.env,
+    // A secret in the run's environment, which neither agent-desktop nor the app it launches may see.
+    env: { ...fake.env, E2E_PROBE_SECRET: 'hunter2' },
     headed: false,
     workerSlot: 0,
     signal,
@@ -140,7 +161,7 @@ function actions(calls: readonly { key: string }[]): string[] {
 const startAttempt = (surface: DesktopSurface) =>
   surface.startAttempt({
     attemptId: 'a',
-    artifactsDir: process.cwd(),
+    artifactsDir: artifacts(),
     resolveSecret: async () => '',
     signal,
     appLog: () => undefined,
@@ -152,7 +173,10 @@ describe('DesktopSurface', () => {
   it('launches the app by id and reads only the window of the process it launched', async () => {
     const { fake } = await launched({});
     const calls = fake.calls();
-    expect(calls.find((call) => call.key === 'launch')?.args).toEqual(expect.arrayContaining(['launch', 'dev.e2e.spike.form', '--activate', '--no-attach']));
+    const launch = calls.find((call) => call.key === 'launch')?.args;
+    expect(launch).toEqual(expect.arrayContaining(['launch', 'dev.e2e.spike.form', '--no-attach', '--arg=-ApplePersistenceIgnoreState', '--arg=YES']));
+    // In the background: the app never takes the keyboard from whoever is at the Mac.
+    expect(launch).not.toContain('--activate');
     expect(calls.find((call) => call.key === 'list-windows')?.args).toEqual(['list-windows', '--app', 'SpikeForm']);
     const snapshot = calls.find((call) => call.key === 'snapshot');
     expect(snapshot?.args).toEqual(expect.arrayContaining(['--window-id', 'w-mine', '--include-bounds']));
@@ -190,20 +214,16 @@ describe('DesktopSurface', () => {
     expect(actions(fake.calls()).slice(-2)).toEqual(['check', 'uncheck']);
   });
 
-  it('sets the value of a list that takes no select, the label on stdin', async () => {
+  it('never sets the value of an editable list select refused, so no label lands in it as free text', async () => {
     const editable = { ok: true, data: { snapshot_id: 's5', window: { id: 'w-mine' }, tree: { role: 'window', name: 'Form', children: [{ role: 'combobox', name: 'Plan', ref_id: '@s5:e1', available_actions: ['Click', 'SetValue', 'SetFocus'] }] } } };
-    const { surface, fake } = await launched({ snapshot: [editable], select: [failure('ACTION_NOT_SUPPORTED', 'not_delivered')] }, { observe: false });
-    const observed = await surface.observe(operation(), undefined);
-    await surface.perform(observed.root.children![0]!.ref, { kind: 'selectOption', value: 'Team' }, operation());
-    expect(actions(fake.calls())).toEqual(['snapshot', 'snapshot', 'select', 'set-value']);
-    expect(fake.calls().find((call) => call.key === 'select')?.args.slice(-2)).toEqual(['--', 'Team']);
-    expect(fake.calls().at(-1)?.stdin).toBe('Team');
-  });
-
-  it('reports a list that takes neither select nor a value as unsupported', async () => {
-    const { surface, fake, byTestId } = await launched({ select: [failure('ACTION_NOT_SUPPORTED', 'not_delivered')] });
-    await expect(surface.perform(byTestId('plan'), { kind: 'selectOption', value: 'Team' }, operation())).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' });
-    expect(actions(fake.calls())).toEqual(['snapshot', 'snapshot', 'select']);
+    const refusals = { ACTION_NOT_SUPPORTED: 'UNSUPPORTED_CAPABILITY', POLICY_DENIED: 'UNSUPPORTED_CAPABILITY', TIMEOUT: 'NOT_ACTIONABLE', AMBIGUOUS_TARGET: 'NOT_ACTIONABLE' } as const;
+    for (const [refusal, code] of Object.entries(refusals)) {
+      const { surface, fake } = await launched({ snapshot: [editable], select: [failure(refusal, 'not_delivered')] }, { observe: false });
+      const observed = await surface.observe(operation(), undefined);
+      await expect(surface.perform(observed.root.children![0]!.ref, { kind: 'selectOption', value: 'Team' }, operation())).rejects.toMatchObject({ code });
+      expect(fake.calls().find((call) => call.key === 'select')?.args.slice(-2)).toEqual(['--', 'Team']);
+      expect(fake.calls().some((call) => call.key === 'set-value')).toBe(false);
+    }
   });
 
   it('passes a label that starts with a dash after --, so it is never read as a flag', async () => {
@@ -263,7 +283,7 @@ describe('DesktopSurface', () => {
   it('presses keys as agent-desktop combos into the window of the launched process', async () => {
     const { surface, fake } = await launched({});
     await surface.pressKey('ControlOrMeta+a', operation());
-    expect(fake.calls().at(-1)?.args).toEqual(['press', HOST === 'macos' ? 'cmd+a' : 'ctrl+a', '--window-id', 'w-mine']);
+    expect(fake.calls().at(-1)?.args).toEqual(['press', 'cmd+a', '--window-id', 'w-mine']);
   });
 
   it('sends no key to whatever has focus when the control it was meant for refuses focus', async () => {
@@ -323,10 +343,16 @@ describe('DesktopSurface', () => {
     expect(observed.pixels).toBeUndefined();
   });
 
-  it('withholds a screenshot when a secure field moved while it was captured', async () => {
-    const moved = JSON.parse(JSON.stringify(snapshotAnswer('macos/sign-in-form')).replace('"y":675', '"y":700')) as unknown;
-    const form = snapshotAnswer('macos/sign-in-form');
-    const { surface } = await launched({ snapshot: [form, form, form, moved] }, { snapshot: 'macos/sign-in-form' });
+  it('withholds a screenshot when a secure field moved while it was captured, and keeps one that did not', async () => {
+    const form = renamed('macos/sign-in-form', 'w-8321', 'w-mine');
+    const moved = JSON.parse(JSON.stringify(form).replace('"y":675', '"y":700')) as unknown;
+    // The window and its capture as agent-desktop reports them: the capture is the window's size at scale 1, all black.
+    const { width, height } = (form as { data: { tree: { bounds: { width: number; height: number } } } }).data.tree.bounds;
+    const capture = (pid: number) => ({ screenshot: [{ ok: true, writePng: { width, height }, data: { scale_factor: 1 } }], 'list-windows': [{ ok: true, data: [{ id: 'w-mine', pid, process_instance: 'instance-1', is_focused: true }] }] });
+    const steady = await launched((pid) => ({ ...capture(pid), snapshot: [form] }), { snapshot: 'macos/sign-in-form' });
+    await startAttempt(steady.surface);
+    await expect(steady.surface.screenshot('steady', operation())).resolves.toMatch(/steady\.png$/);
+    const { surface } = await launched((pid) => ({ ...capture(pid), snapshot: [form, form, form, moved] }), { snapshot: 'macos/sign-in-form' });
     await startAttempt(surface);
     await expect(surface.screenshot('moved', operation())).rejects.toThrow(/window changed while it was captured/);
   });
@@ -339,10 +365,10 @@ describe('DesktopSurface', () => {
   });
 
   it('keeps the process as its own when a quit fails, so dispose quits it', async () => {
-    const { surface, app, fake } = await launched((pid) => ({ 'list-apps': [failure('INTERNAL', 'not_delivered'), { ok: true, data: { apps: [{ pid, process_instance: 'instance-1' }] } }] }), { observe: false });
+    const { surface, app, fake } = await launched((pid) => ({ 'list-apps': [{ ok: true, data: { apps: [] } }, failure('INTERNAL', 'not_delivered'), { ok: true, data: { apps: [{ pid, process_instance: 'instance-1' }] } }] }), { observe: false });
     await expect(surface.endAttempt({ signal, timeoutMs: 5_000 })).rejects.toThrow(/find SpikeForm/);
     await surface.dispose({ signal, timeoutMs: 5_000 });
-    expect(fake.calls().filter((call) => call.key === 'list-apps')).toHaveLength(2);
+    expect(fake.calls().filter((call) => call.key === 'list-apps')).toHaveLength(3);
     expect(await gone(app.pid)).toBe(true);
   });
 
@@ -370,10 +396,10 @@ describe('DesktopSurface', () => {
   });
 
   it('keeps the process when the app list is incomplete, so dispose looks again', async () => {
-    const { surface, fake } = await launched((pid) => ({ 'list-apps': [{ ok: true, data: { apps: [], complete: false } }, { ok: true, data: { apps: [{ pid, process_instance: 'instance-1' }] } }] }), { observe: false });
+    const { surface, fake } = await launched((pid) => ({ 'list-apps': [{ ok: true, data: { apps: [] } }, { ok: true, data: { apps: [], complete: false } }, { ok: true, data: { apps: [{ pid, process_instance: 'instance-1' }] } }] }), { observe: false });
     await expect(surface.endAttempt({ signal, timeoutMs: 5_000 })).rejects.toThrow(/listed the apps only in part/);
     await surface.dispose({ signal, timeoutMs: 5_000 });
-    expect(fake.calls().filter((call) => call.key === 'list-apps')).toHaveLength(2);
+    expect(fake.calls().filter((call) => call.key === 'list-apps')).toHaveLength(3);
   });
 
   it('reports a type after a clear that changed the field as possibly committed', async () => {
@@ -484,7 +510,7 @@ describe('DesktopSurface', () => {
     try {
       const fake = fakeScenario({ status: [{ ok: true, data: { version: '1.3.1', permissions: { accessibility: { state: 'granted' } } } }] });
       const init = (bundleId: string) =>
-        tracked(new DesktopSurface(resolveOptions({ binary: FAKE_BINARY }), 'macos')).init({ runId: 'r', targetName: 'mac', projectRoot: directory, app: { appPath: 'Built.app', bundleId }, env: fake.env, headed: false, workerSlot: 0, signal, log: () => undefined });
+        tracked(new DesktopSurface(resolveOptions({ binary: fake.binary }), 'macos')).init({ runId: 'r', targetName: 'mac', projectRoot: directory, app: { appPath: 'Built.app', bundleId }, env: fake.env, headed: false, workerSlot: 0, signal, log: () => undefined });
       await expect(init('dev.e2e.built')).resolves.toBeUndefined();
       await expect(init('com.example.other')).rejects.toThrow(/is not the CFBundleIdentifier "dev.e2e.built"/);
     } finally {
@@ -561,7 +587,7 @@ describe('DesktopSurface', () => {
     mkdirSync(path.join(directory, 'Empty.app'));
     try {
       const fake = fakeScenario({ status: [{ ok: true, data: { version: '1.3.1', permissions: { accessibility: { state: 'granted' }, screen_recording: { state: 'granted' } } } }] });
-      const surface = tracked(new DesktopSurface(resolveOptions({ binary: FAKE_BINARY }), 'macos'));
+      const surface = tracked(new DesktopSurface(resolveOptions({ binary: fake.binary }), 'macos'));
       const checks = await surface.doctor({ targetName: 'mac', projectRoot: directory, app: { appPath: 'Empty.app' }, env: fake.env, headed: false, signal, log: () => undefined });
       expect(checks.find((check) => check.id === 'app-path')).toMatchObject({ status: 'fail', message: expect.stringMatching(/no Contents\/Info.plist/) });
     } finally {
@@ -575,7 +601,7 @@ describe('DesktopSurface', () => {
     writeFileSync(path.join(directory, 'Built.app', 'Contents', 'Info.plist'), '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>dev.e2e.built</string></dict></plist>');
     try {
       const fake = fakeScenario({ status: [{ ok: true, data: { version: '1.3.1', permissions: { accessibility: { state: 'granted' } } } }] });
-      const surface = tracked(new DesktopSurface(resolveOptions({ binary: FAKE_BINARY }), 'macos'));
+      const surface = tracked(new DesktopSurface(resolveOptions({ binary: fake.binary }), 'macos'));
       await surface.init({ runId: 'r', targetName: 'mac', projectRoot: directory, app: { appPath: 'Built.app' }, env: fake.env, headed: false, workerSlot: 0, signal, log: () => undefined });
       await expect(surface.restart({ ...operation(), timeoutMs: 0 })).rejects.toMatchObject({ code: 'OPERATION_TIMEOUT' });
     } finally {
@@ -601,7 +627,7 @@ describe('DesktopSurface', () => {
   it('keeps a launch whose process it could not look for, so the next quit looks again', async () => {
     const { surface, fake } = await initialized({
       launch: [{ spawn: true, ...(failure('TIMEOUT', 'delivered_unverified') as object) }],
-      'list-apps': [failure('INTERNAL', 'not_delivered'), { spawnedApps: { name: 'SpikeForm', bundle_id: 'dev.e2e.spike.form' } }],
+      'list-apps': [{ ok: true, data: { apps: [] } }, failure('INTERNAL', 'not_delivered'), { spawnedApps: { name: 'SpikeForm', bundle_id: 'dev.e2e.spike.form' } }],
     });
     await expect(surface.restart(operation())).rejects.toMatchObject({ code: 'ACTION_MAY_HAVE_COMMITTED' });
     await expect(surface.endAttempt({ signal, timeoutMs: 5_000 })).rejects.toThrow(/list apps/);
@@ -640,5 +666,168 @@ describe('DesktopSurface', () => {
     await surface.endAttempt({ signal, timeoutMs: 5_000 });
     expect(await gone(app.pid)).toBe(true);
     expect(fake.calls().some((call) => call.key === 'close-app')).toBe(false);
+  });
+  it('gives agent-desktop and the app it launches only a few variables of the run', async () => {
+    const { fake, app } = await launched({});
+    for (const call of fake.calls()) {
+      expect(call.envNames).not.toContain('E2E_PROBE_SECRET');
+      expect(call.envNames).toContain('AGENT_DESKTOP_HOME');
+    }
+    const environment = await environmentOf(app.pid);
+    expect(environment).toMatch(/E2E_DESKTOP_LAUNCH=/);
+    expect(environment).not.toMatch(/E2E_PROBE_SECRET/);
+  });
+
+  it('brings the app forward at launch only with physical input on', async () => {
+    const { fake } = await launched({}, { options: { headed: true } });
+    expect(fake.calls().find((call) => call.key === 'launch')?.args).toContain('--activate');
+  });
+
+  it('takes the one new copy a failed launch started when no environment can be read, and leaves an older one', async () => {
+    const theirs = unreadableCopy();
+    const { surface, fake } = await initialized({
+      launch: [{ spawn: 'unreadable', ...(failure('TIMEOUT', 'delivered_unverified') as object) }],
+      'list-apps': [{ spawnedApps: { name: 'SpikeForm', bundle_id: 'dev.e2e.spike.form' }, alsoRunning: [theirs] }],
+    });
+    await expect(surface.restart(operation())).rejects.toMatchObject({ code: 'ACTION_MAY_HAVE_COMMITTED' });
+    await surface.endAttempt({ signal, timeoutMs: 5_000 });
+    expect(await gone(fake.spawned()[0]!)).toBe(true);
+    expect(await gone(theirs, 300)).toBe(false);
+  });
+
+  it('takes no copy whose environment cannot be read when the copies before the launch are unknown', async () => {
+    const theirs = unreadableCopy();
+    const { surface } = await initialized({
+      launch: [failure('TIMEOUT', 'delivered_unverified')],
+      'list-apps': [
+        { ok: true, data: { apps: [], complete: false } },
+        { ok: true, data: { apps: [{ name: 'SpikeForm', bundle_id: 'dev.e2e.spike.form', pid: theirs, process_instance: 'theirs' }] } },
+      ],
+    });
+    await expect(surface.restart(operation())).rejects.toMatchObject({ code: 'ACTION_MAY_HAVE_COMMITTED' });
+    await expect(surface.endAttempt({ signal, timeoutMs: 1_000 })).rejects.toThrow(/no process it started was found/);
+    expect(await gone(theirs, 300)).toBe(false);
+  });
+
+  it('takes neither of two new copies whose environment cannot be read', async () => {
+    const first = unreadableCopy();
+    const second = unreadableCopy();
+    const { surface } = await initialized({
+      launch: [failure('TIMEOUT', 'delivered_unverified')],
+      'list-apps': [
+        { ok: true, data: { apps: [] } },
+        { ok: true, data: { apps: [first, second].map((pid) => ({ name: 'SpikeForm', bundle_id: 'dev.e2e.spike.form', pid, process_instance: `p${pid}` })) } },
+      ],
+    });
+    await expect(surface.restart(operation())).rejects.toMatchObject({ code: 'ACTION_MAY_HAVE_COMMITTED' });
+    await expect(surface.endAttempt({ signal, timeoutMs: 1_000 })).rejects.toThrow(/no process it started was found/);
+    expect(await gone(first, 300)).toBe(false);
+    expect(await gone(second, 300)).toBe(false);
+  });
+
+  it('refuses a launch agent-desktop reports for a copy that ran before it, even one whose environment cannot be read', async () => {
+    const theirs = unreadableCopy();
+    const { surface } = await initialized({
+      launch: [{ ok: true, data: { app: 'SpikeForm', pid: theirs, process_instance: 'theirs' } }],
+      'list-apps': [{ ok: true, data: { apps: [{ name: 'SpikeForm', bundle_id: 'dev.e2e.spike.form', pid: theirs, process_instance: 'theirs' }] } }],
+    });
+    await expect(surface.restart(operation())).rejects.toThrow(/handed over to a copy already running/);
+    await surface.endAttempt({ signal, timeoutMs: 5_000 });
+    expect(await gone(theirs, 300)).toBe(false);
+  });
+
+  it('leaves nothing to look for after an open whose budget ran out before it launched', async () => {
+    const { surface, fake } = await initialized({});
+    await expect(surface.restart({ ...operation(), timeoutMs: 0 })).rejects.toMatchObject({ code: 'OPERATION_TIMEOUT' });
+    const started = Date.now();
+    await surface.endAttempt({ signal, timeoutMs: 5_000 });
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(fake.calls().some((call) => call.key === 'launch')).toBe(false);
+  });
+
+  it('keeps a launch whose lookup ran out of time, so the next quit looks again', async () => {
+    const { surface, fake } = await initialized({
+      launch: [{ spawn: true, ...(failure('TIMEOUT', 'delivered_unverified') as object) }],
+      'list-apps': [{ ok: true, data: { apps: [] } }, { sleepMs: 3_000, ok: true, data: { apps: [] } }, { spawnedApps: { name: 'SpikeForm', bundle_id: 'dev.e2e.spike.form' } }],
+    });
+    await expect(surface.restart(operation())).rejects.toMatchObject({ code: 'ACTION_MAY_HAVE_COMMITTED' });
+    await expect(surface.endAttempt({ signal, timeoutMs: 1_000 })).rejects.toThrow(/ran out of time/);
+    await surface.dispose({ signal, timeoutMs: 5_000 });
+    expect(await gone(fake.spawned()[0]!)).toBe(true);
+  });
+
+  it('reads only the window a test chose, until it goes back to the focused one', async () => {
+    const { surface, fake } = await launched((pid) => ({
+      'list-windows': [{ ok: true, data: [{ id: 'w-mine', pid, process_instance: 'instance-1', is_focused: true }, { id: 'w-panel', pid, process_instance: 'instance-1', is_focused: false }] }],
+    }));
+    await expect(surface.useWindow('w-gone', signal, 5_000)).rejects.toMatchObject({ code: 'NOT_ACTIONABLE' });
+    await surface.useWindow('w-panel', signal, 5_000);
+    await surface.observe(operation(), undefined);
+    expect(fake.calls().findLast((call) => call.key === 'snapshot')?.args).toEqual(expect.arrayContaining(['--window-id', 'w-panel']));
+    await surface.useWindow(undefined, signal, 5_000);
+    await surface.observe(operation(), undefined);
+    expect(fake.calls().findLast((call) => call.key === 'snapshot')?.args).toEqual(expect.arrayContaining(['--window-id', 'w-mine']));
+  });
+
+  it("sends no key into a window that cannot be shown to be the app's key window", async () => {
+    const { surface, fake, byTestId } = await launched((pid) => ({
+      snapshot: [renamed('macos/appkit-form', 'w-8032', 'w-mine')],
+      'list-windows': [{ ok: true, data: [{ id: 'w-mine', pid, process_instance: 'instance-1', is_focused: false }, { id: 'w-panel', pid, process_instance: 'instance-1', is_focused: true }] }],
+    }));
+    await expect(surface.perform(byTestId('username'), { kind: 'press', key: 'Enter' }, operation())).rejects.toThrow(/key window/);
+    expect(fake.calls().some((call) => call.key === 'press')).toBe(false);
+  });
+
+  it('sends no key when another control in the same place holds focus', async () => {
+    const form = renamed('macos/sign-in-form', 'w-8321', 'w-mine');
+    const swapped = JSON.parse(JSON.stringify(form).replace('"name":"Username"', '"name":"Search"').replace('"value":"username"', '"value":"search"')) as unknown;
+    const { surface, fake, byTestId } = await launched({ snapshot: [form, form, swapped] });
+    await expect(surface.perform(byTestId('username'), { kind: 'press', key: 'Enter' }, operation())).rejects.toThrow(/did not keep keyboard focus/);
+    expect(fake.calls().some((call) => call.key === 'press')).toBe(false);
+  });
+
+  it('proves no control absent from a window read in part', async () => {
+    const partial = snapshotAnswer('macos/appkit-form') as { ok: true; data: Record<string, unknown> };
+    const { surface } = await launched({ snapshot: [{ ...partial, data: { ...partial.data, complete: false } }] }, { observe: false });
+    const missing = { kind: 'query', query: { kind: 'testId', value: { kind: 'string', value: 'nowhere', exact: true } } } as const;
+    await expect(surface.locate(missing, operation())).rejects.toThrow(/no match is not proof/);
+    const present = { kind: 'query', query: { kind: 'testId', value: { kind: 'string', value: 'username', exact: true } } } as const;
+    await expect(surface.locate(present, operation())).resolves.toHaveLength(1);
+  });
+
+  it("keeps the ids of an interactive screen across the whole reads a screenshot's mask takes", async () => {
+    const field = { role: 'textfield', name: 'Name', ref_id: '@s:e1', bounds: { x: 10, y: 10, width: 50, height: 20 } };
+    const window = { role: 'window', name: 'Form', bounds: { x: 0, y: 0, width: 100, height: 100 } };
+    const interactive = { ok: true, data: { snapshot_id: 's', window: { id: 'w-mine' }, tree: { ...window, children: [field] } } };
+    const whole = { ok: true, data: { snapshot_id: 's', window: { id: 'w-mine' }, tree: { ...window, children: [{ role: 'group', name: 'Details', children: [field] }] } } };
+    const { surface } = await launched(
+      {
+        snapshot: [interactive, interactive, interactive, whole, whole, interactive],
+        screenshot: [{ ok: true, writePng: { width: 100, height: 100 }, data: { scale_factor: 1 } }],
+      },
+      { observe: false, options: { snapshot: 'interactive' } },
+    );
+    await startAttempt(surface);
+    const before = await surface.observe(operation(), undefined);
+    await surface.screenshot('shot', operation());
+    const after = await surface.observe(operation(), undefined);
+    expect(after.root.children?.[0]?.ref.id).toBe(before.root.children?.[0]?.ref.id);
+  });
+
+  it('sweeps the state directories of workers that are gone, and keeps the ones in use', async () => {
+    const dead = spawn(process.execPath, ['-e', '']);
+    await new Promise((resolve) => dead.on('exit', resolve));
+    const left = mkdtempSync(path.join(tmpdir(), 'e2e-agent-desktop-'));
+    writeFileSync(path.join(left, 'owner'), String(dead.pid));
+    const used = mkdtempSync(path.join(tmpdir(), 'e2e-agent-desktop-'));
+    writeFileSync(path.join(used, 'owner'), String(process.pid));
+    try {
+      await initialized({});
+      expect(existsSync(left)).toBe(false);
+      expect(existsSync(used)).toBe(true);
+    } finally {
+      rmSync(left, { recursive: true, force: true });
+      rmSync(used, { recursive: true, force: true });
+    }
   });
 });
