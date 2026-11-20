@@ -106,7 +106,7 @@ test('checkout', async ({ app, agent, screen }) => {
 
 | Playwright | e2e |
 | --- | --- |
-| `click()`, `dblclick()` | `tap()`、`doubleTap()`。`click()` と `dblclick()` はその別名 |
+| `click()`, `dblclick()` | `tap()`、`doubleTap()`。`click()` と `dblclick()` はそれぞれの別名 |
 | `click({ button: 'right' })`, `click({ delay })` | `secondaryTap()`、`longPress({ duration })` |
 | `click({ position })`, `click({ modifiers })` | `tap({ position })`、`tap({ modifiers })` |
 | `fill()`, `pressSequentially()`, `clear()`, `focus()`, `blur()`, `hover()`, `check()`, `uncheck()`, `dragTo()`, `setInputFiles(path)`, `selectOption({ label })` または `{ value }` | 同じ。ただし `force`、`trial`、`position` はなし |
@@ -188,7 +188,7 @@ test('checkout', async ({ app, agent, screen }) => {
 
 ## ページオブジェクトを移す
 
-ページオブジェクトには、クエリとアクション用に `screen` を、キーボード、マウス、CSS セレクター、`evaluate` 用に `browser` を渡します。フィクスチャとして提供してください。
+ページオブジェクトには `screen` と `browser` を渡します。`screen` はクエリとアクション用、`browser` はキーボード、マウス、CSS セレクター、`evaluate` 用です。フィクスチャとして提供してください。
 
 ```ts title="tests/page-models/account-page.ts"
 import type { Locator, Screen } from 'e2e';

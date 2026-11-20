@@ -120,18 +120,18 @@ remaining"`）は、アプリの更新とタイミングが競合しています
 .e2e/results/todos-adds-a-todo-1a2b3c4d5e6f7a8b/attempt-1/screenshots/001-failure.png
 ```
 
-テストの段階まで進んだ実行は、最初に `results/` を空にします。`--last-failed` による再実行では、再実行元のレポートが参照するファイルを保持し、新しい試行を各テストの `rerun-<n>/` に書きます。
+テストを実行する段階まで進むと、e2e は最初に `results/` を空にします。`--last-failed` による再実行では、再実行元のレポートが参照するファイルを保持し、新しい試行を各テストの `rerun-<n>/` に書きます。
 
 | アーティファクト | 保存されるタイミング |
 | --- | --- |
 | スクリーンショット | エンジンが対応していれば、失敗した試行で撮影します。組み込みの `agent.assert` は、`screenshot: false` でなければ判定の成否にかかわらず撮影します。`app.screenshot('label')` でも撮影できます。マスキングされるのは機密フィールドだけです。[シークレット入力後のスクリーンショット](/reference/security#screenshots-after-a-secret-fill)を参照してください。 |
-| ダウンロード | `browser.waitForDownload` で保存したファイルです。種類は `download` で、アプリが提供した内容をそのまま保存します。ランナーがシークレットをマスキングする条件は[ダウンロード](/reference/security#downloads)を参照してください。 |
+| ダウンロード | `browser.waitForDownload` で保存したファイルです。アーティファクトの種類は `download` で、アプリが返した内容をそのまま保存します。ランナーがシークレットをマスキングする条件は[ダウンロード](/reference/security#downloads)を参照してください。 |
 | 動画 | [録画を有効にした場合](#watch-it-happen)。動画は何もマスキングしません。[秘匿の対象外](/reference/security#where-redaction-stops)を参照してください。 |
 | エージェントのトランスクリプト | [`--debug`](#agent-steps) を指定した場合。 |
 
 ## スクリプトから読む report.json
 
-テストの段階まで進んだ実行は、[出力ディレクトリ](/reference/config#output)（デフォルトは `.e2e`）に `report.json` も書きます。バージョン付きスキーマで、実行の全結果を保持します。`--reporter json` はこれを標準出力に表示します。
+テストを実行する段階まで進むと、e2e は[出力ディレクトリ](/reference/config#output)（デフォルトは `.e2e`）に `report.json` も書きます。バージョン付きスキーマで、実行の全結果を保持します。`--reporter json` はこれを標準出力に表示します。
 
 ```bash
 jq '.run | {status, exitCode, errors}' .e2e/report.json

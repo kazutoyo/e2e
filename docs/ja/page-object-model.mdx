@@ -73,7 +73,7 @@ test('rejects a wrong password', async ({ app, signInPage }) => {
 
 ## エージェントのゴールを組み込む
 
-メソッドの引数で `agent` を受け取り、アプリの改修でよく変わる操作をゴールとして包めます。
+メソッドの引数で `agent` を受け取れば、アプリの改修でよく変わる操作を、ゴールとしてメソッドにまとめられます。
 
 ```ts
 async addCard(agent: Agent, name: string) {

@@ -851,7 +851,7 @@ const file = await browser.waitForDownload(() =>
 
 #### `keyboard`
 
-ビューポートに対してキーボード入力を送ります。入力先はフォーカスのある要素です。
+要素を指定せず、ページ全体に対してキーボード入力を送ります。入力はフォーカスのある要素に届きます。
 
 ```ts
 await browser.keyboard.press('Escape');
@@ -864,7 +864,7 @@ await browser.keyboard.type('hello');
 
 #### `mouse`
 
-エージェントの観測とは独立して、テストコードからビューポートに対してポインター入力を行います。
+エージェントの観測とは独立して、テストコードからビューポートの座標でポインター入力を行います。
 
 ```ts
 await browser.mouse.move(120, 240);

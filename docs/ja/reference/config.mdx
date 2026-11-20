@@ -1060,7 +1060,7 @@ await screen.getByLabel('API key').fill(secrets.get('apiKey'));
 
 #### エンジンオプション内のシークレット
 
-実行が始まる前の `e2e.config.ts` の評価中、`secrets.get(name)` は名前による参照を返します。エンジンオプションはこの参照を保持できます。
+実行が始まる前の `e2e.config.ts` の評価中は、`secrets.get(name)` は名前による参照を返します。エンジンオプションはこの参照を保持できます。
 
 ```ts
 engine: web({ basicAuth: { username, password: secrets.get('previewPassword') } }),

@@ -133,7 +133,7 @@ export default {
 | `ctx.attachTurns(turns)` | モデルのターン（`{ index, calls, outcome }`）を短縮した記録としてステップに保持。失敗したステップの下に直近のものを表示します |
 | `ctx.attachScreenshot(pixels, label)` | 観測した画像をステップの `screenshot` アーティファクトとして保持し、レポート内の ID を返します |
 
-`tapAt(point)` と `hoverAt(point)` は、エンジンの座標操作を呼び出します。座標操作がない場合は、その地点にある、観測に列挙されたコントロールを操作します。`dragAt(from, to)` は、エンジンの `dragTo` ポインター操作で 2 点間をドラッグします。それがなくても `dragTo` 操作に対応するエンジンなら、両点が、列挙された別々のコントロール上にある場合に ID でドラッグします。それ以外の `dragAt` は `UNSUPPORTED_CAPABILITY` で失敗します。`hitTest(point)` は操作せずに、その座標のコントロールを探します。キーボードに対応するエンジンには、フォーカス中のコントロール向けの `typeText`、`pressKey`、`dismissKeyboard` が加わります。`upload(target, paths)` はプロジェクト相対パスと、[アップロードポリシー](/reference/agent#action-tools)にある `sample:` ファイルを受け取ります。プロジェクトルート外や隠しパスは `POLICY_DENIED`、存在しないファイルは `INVALID_ARGUMENT` で拒否します。
+`tapAt(point)` と `hoverAt(point)` は、エンジンの座標操作を呼び出します。座標操作がない場合は、その地点にある、観測で列挙されたコントロールを操作します。`dragAt(from, to)` は、エンジンの `dragTo` ポインター操作で 2 点間をドラッグします。それがなくても `dragTo` 操作に対応するエンジンなら、2 点がそれぞれ別の列挙済みコントロール上にあるときに ID でドラッグします。それ以外の `dragAt` は `UNSUPPORTED_CAPABILITY` で失敗します。`hitTest(point)` は操作せずに、その座標のコントロールを探します。キーボードに対応するエンジンには、フォーカス中のコントロール向けの `typeText`、`pressKey`、`dismissKeyboard` が加わります。`upload(target, paths)` はプロジェクト相対パスと、[アップロードポリシー](/reference/agent#action-tools)にある `sample:` ファイルを受け取ります。プロジェクトルート外や隠しパスは `POLICY_DENIED`、存在しないファイルは `INVALID_ARGUMENT` で拒否します。
 
 観測の `keyboardVisible` は画面キーボードの表示状態を示します。エンジンが判断できない場合は省略されます。
 

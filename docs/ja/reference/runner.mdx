@@ -155,7 +155,7 @@ console.log(result.status, result.explore.ended, result.explore.findings.length)
 | `explore.steps` | エージェントが計画して実行した各ステップと、その状態です。状態は `passed`、`failed`、`blocked`、`exhausted` のいずれかです。 |
 | `explore.findings` | 各発見事項です。`kind`、1〜5 の `severity`、`title`、`expected`、`actual`、`reproduction` を持ちます。`issue` は実行を失敗にし、`warning` は失敗にしません。 |
 
-探索が始まった後は、発見事項、失敗、中断も、それぞれの状態をレポートに含めて resolve します。オプションや設定のせいで探索を開始できない場合は、対応する `e2e explore` フラグと同じように、開始前に reject します。[`isE2EError`](#ise2eerror) で判別できます。
+探索が始まった後は、発見事項、失敗、中断も、それぞれの状態をレポートに含めて resolve します。オプションや設定に問題があって探索を開始できない場合は、対応する `e2e explore` フラグと同じように、開始前に reject します。[`isE2EError`](#ise2eerror) で判別できます。
 
 | 投げるエラー | 発生条件 |
 | --- | --- |
