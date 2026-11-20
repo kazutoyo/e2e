@@ -54,6 +54,16 @@ translation moves or goes with it in the same change.
   `@e2e-dev/web`, MCP, CI, GitHub Actions.
 - Katakana loanwords keep the long vowel mark (サーバー, ユーザー,
   プロバイダー), except ブラウザ.
+- Put the condition first and name the subject: `iOS の React Native
+  アプリでは、素の View が…`, not `iOS では、通常の React Native の View
+  は…`. Check that later sentences keep their subject.
+- Don't stack long modifiers before a noun. Name the topic first, then
+  split the rest into a second sentence.
+- Don't coin a noun the page never explains (`準備のゴール`). Say what
+  the thing does: `テストの前提となる状態を作るゴール`.
+- Translate the term, not the word: a glossary term follows the glossary,
+  while the same English word in its everyday sense (`your own` → `独自の`)
+  stays everyday Japanese.
 
 | English | Japanese |
 | --- | --- |
