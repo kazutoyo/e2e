@@ -809,6 +809,50 @@ describe('DesktopSurface', () => {
     }
   });
 
+  it('sends a key to an app in the background by its name, once it saw its copy is the only one', async () => {
+    const unconfirmed = { ok: false, error: { code: 'STALE_REF', message: 'focus unconfirmed', details: { cause: 'exact_window_focus_unconfirmed' }, disposition: { delivery: 'not_delivered', retry: 'safe' } } };
+    const { surface, fake, byTestId } = await launched((pid) => ({
+      snapshot: [renamed('macos/appkit-form', 'w-8032', 'w-mine')],
+      press: [unconfirmed, { ok: true, data: {} }],
+      'list-apps': [{ ok: true, data: { apps: [] } }, { ok: true, data: { apps: [{ name: 'SpikeForm', pid, process_instance: 'instance-1' }] } }],
+    }));
+    await surface.perform(byTestId('username'), { kind: 'press', key: 'Tab' }, operation());
+    expect(fake.calls().filter((call) => call.key === 'press').map((call) => call.args)).toEqual([
+      ['press', 'tab', '--window-id', 'w-mine'],
+      ['press', 'tab', '--app', 'SpikeForm'],
+    ]);
+  });
+
+  it('sends no key by name while another copy of the app shares it', async () => {
+    const unconfirmed = { ok: false, error: { code: 'STALE_REF', message: 'focus unconfirmed', details: { cause: 'exact_window_focus_unconfirmed' }, disposition: { delivery: 'not_delivered', retry: 'safe' } } };
+    const theirs = otherCopy();
+    const { surface, fake } = await launched((pid) => ({
+      press: [unconfirmed],
+      'list-apps': [{ ok: true, data: { apps: [] } }, { ok: true, data: { apps: [{ name: 'SpikeForm', pid: theirs, process_instance: 'theirs' }, { name: 'SpikeForm', pid, process_instance: 'instance-1' }] } }],
+    }));
+    await expect(surface.pressKey('Enter', operation())).rejects.toMatchObject({ code: 'NOT_ACTIONABLE', message: expect.stringMatching(/another copy/) });
+    expect(fake.calls().filter((call) => call.key === 'press')).toHaveLength(1);
+  });
+
+  it('closes the menu a select of a missing option left open, and reports the option missing', async () => {
+    const { surface, fake, byTestId } = await launched((pid) => ({
+      snapshot: [renamed('macos/appkit-form', 'w-8032', 'w-mine')],
+      select: [failure('APP_UNRESPONSIVE', 'delivered_unverified')],
+      'list-surfaces': [{ ok: true, data: { pid, surfaces: [{ type: 'context_menu' }] } }, { ok: true, data: { pid, surfaces: [] } }],
+    }));
+    await expect(surface.perform(byTestId('plan'), { kind: 'selectOption', value: 'Enterprise' }, operation())).rejects.toMatchObject({ code: 'NOT_ACTIONABLE', message: expect.stringMatching(/no option "Enterprise"/) });
+    expect(fake.calls().find((call) => call.key === 'select')?.args).toEqual(expect.arrayContaining(['--timeout-ms', '3000']));
+    expect(fake.calls().filter((call) => call.key === 'press').map((call) => call.args[1])).toEqual(['escape']);
+  });
+
+  it('reports a select that may have chosen something when no menu is left open', async () => {
+    const { surface, byTestId } = await launched((pid) => ({
+      select: [failure('TIMEOUT', 'delivered_unverified')],
+      'list-surfaces': [{ ok: true, data: { pid, surfaces: [] } }],
+    }));
+    await expect(surface.perform(byTestId('plan'), { kind: 'selectOption', value: 'Team' }, operation())).rejects.toMatchObject({ code: 'ACTION_MAY_HAVE_COMMITTED' });
+  });
+
   it("sends no key into a window that cannot be shown to be the app's key window", async () => {
     const { surface, fake, byTestId } = await launched((pid) => ({
       snapshot: [renamed('macos/appkit-form', 'w-8032', 'w-mine')],
@@ -852,6 +896,28 @@ describe('DesktopSurface', () => {
     await surface.screenshot('shot', operation());
     const after = await surface.observe(operation(), undefined);
     expect(after.root.children?.[0]?.ref.id).toBe(before.root.children?.[0]?.ref.id);
+  });
+
+  it('quits the app a killed worker left running, by its launch token, and nothing else', async () => {
+    const dead = spawn(process.execPath, ['-e', '']);
+    await new Promise((resolve) => dead.on('exit', resolve));
+    const left = (token: string) => spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'], { env: { ...process.env, E2E_DESKTOP_LAUNCH: token } });
+    const theirs = left('another-token');
+    const leaked = left('token-1');
+    children.push(theirs, leaked);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const directories = ['token-1', 'token-1'].map(() => mkdtempSync(path.join(tmpdir(), 'e2e-agent-desktop-')));
+    writeFileSync(path.join(directories[0]!, 'owner'), String(dead.pid));
+    writeFileSync(path.join(directories[0]!, 'app.json'), JSON.stringify({ pid: leaked.pid, token: 'token-1' }));
+    writeFileSync(path.join(directories[1]!, 'owner'), String(dead.pid));
+    writeFileSync(path.join(directories[1]!, 'app.json'), JSON.stringify({ pid: theirs.pid, token: 'token-1' }));
+    try {
+      await initialized({});
+      expect(await gone(leaked.pid!)).toBe(true);
+      expect(await gone(theirs.pid!, 300)).toBe(false);
+    } finally {
+      for (const directory of directories) rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it('sweeps the state directories of workers that are gone, and keeps the ones in use', async () => {

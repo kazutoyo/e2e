@@ -72,6 +72,16 @@ const LAUNCH_READY_MS = 10_000;
 /** How long an app launched in the background may show no window before the engine brings it forward to ask for one. */
 const ACTIVATE_AFTER_MS = 2_000;
 
+/**
+ * How long agent-desktop may look for an option in a list. A select of an
+ * option that exists answers in well under a second; one of an option that
+ * does not exist opens the list's menu and waits out the whole deadline.
+ */
+const SELECT_WAIT_MS = 3_000;
+
+/** How long a menu may take to close after Escape. */
+const MENU_CLOSE_MS = 1_000;
+
 /** The cause of an input that was never sent, because the operation's budget ran out first. */
 const NOT_SENT = new Error('the operation ran out of budget before anything was sent');
 
@@ -80,6 +90,9 @@ const STATE_PREFIX = 'e2e-agent-desktop-';
 
 /** The file in a state directory that names the process that owns it. */
 const OWNER_FILE = 'owner';
+
+/** The file in a state directory that names the app the worker launched and its launch token, so a sweep can quit an app a killed worker left running. */
+const APP_FILE = 'app.json';
 
 /** How old a state directory with no owner file must be before a sweep removes it. */
 const ORPHAN_AGE_MS = 24 * 60 * 60 * 1000;
@@ -399,6 +412,7 @@ export class DesktopSurface {
       throw cause;
     }
     this.forget();
+    if (this.home !== undefined && this.pid !== undefined) await writeFile(path.join(this.home, APP_FILE), JSON.stringify({ pid: this.pid, token: launch.token }));
     await this.windowReadable(operation);
   }
 
@@ -662,6 +676,7 @@ export class DesktopSurface {
     }
     this.pid = undefined;
     this.instance = undefined;
+    if (this.home !== undefined) await rm(path.join(this.home, APP_FILE), { force: true }).catch(() => undefined);
   }
 
   /** Every binding of the screen before: after a launch or a quit, none names a control that still exists. */
@@ -719,7 +734,7 @@ export class DesktopSurface {
   private async capture(operation: OperationContext, windowId = this.chosenWindow, forMask = false): Promise<ProjectedScreen | undefined> {
     const windows = await this.ownWindows(operation);
     // A chosen window that closed is not an empty screen: that would let a negative assertion pass.
-    if (windowId !== undefined && windowId === this.chosenWindow && windows.length > 0 && !windows.some((window) => window.id === windowId)) throw this.chosenClosed();
+    if (windowId !== undefined && windowId === this.chosenWindow && !windows.some((window) => window.id === windowId)) throw this.chosenClosed();
     const candidates =
       windowId === undefined
         ? [...windows.filter((window) => window.is_focused === true), ...windows.filter((window) => window.is_focused !== true && window.visible !== false), ...windows.filter((window) => window.is_focused !== true && window.visible === false)]
@@ -761,17 +776,6 @@ export class DesktopSurface {
     const windows = await this.ownWindows(operation);
     if (this.chosenWindow !== undefined) return windows.find((window) => window.id === this.chosenWindow);
     return windows.find((window) => window.is_focused === true) ?? windows.find((window) => window.visible !== false) ?? windows[0];
-  }
-
-  /**
-   * Runs a command that would name the app, scoped instead to a window of
-   * the process the engine launched, so it can never reach another copy of
-   * the app. Every attempt reads what is left of the operation's budget.
-   */
-  private async scoped<T>(build: (scope: readonly string[]) => readonly string[], operation: OperationContext, call: { label: string; input: boolean }): Promise<T> {
-    const window = await this.ownWindow(operation);
-    if (window === undefined) throw this.chosenWindow === undefined ? invalidState('the app is not running; open it with app.open()') : this.chosenClosed();
-    return await this.run<T>(build(['--window-id', window.id]), { ...call, signal: operation.signal, timeoutMs: operation.timeoutMs });
   }
 
   async observe(context: OperationContext, options: EngineObserveOptions | undefined): Promise<EngineSnapshot> {
@@ -921,7 +925,7 @@ export class DesktopSurface {
           (candidate) => candidate.states?.focused === true && (binding.stable ? candidate.id === binding.id : candidate.role === binding.role && sameRect(candidate.rect, binding.rect)),
         );
         if (!held) throw notActionable(`node ${binding.id} did not keep keyboard focus, so the key would land on another control`);
-        await this.run(['press', combo, '--window-id', window, ...(this.options.headed ? ['--headed'] : [])], { label: `press ${action.key}`, input: true, signal: operation.signal, timeoutMs: operation.timeoutMs });
+        await this.sendKey(combo, window, `press ${action.key}`, operation);
         break;
       }
       case 'selectOption':
@@ -967,15 +971,46 @@ export class DesktopSurface {
    * Chooses an option of a list or dropdown with agent-desktop's `select`,
    * never by setting the value, which would put a missing option in an
    * editable combo box as free text. A stale ref is `NODE_STALE`, so the
-   * harness locates the list again.
+   * harness locates the list again. For a pop-up button agent-desktop opens
+   * the menu to find the option; when it cannot, it leaves the menu open,
+   * which is closed again here and reported as a missing option, since
+   * nothing was chosen.
    */
   private async select(binding: NodeBinding, label: string, operation: OperationContext): Promise<void> {
+    const ref = this.refOf(binding, 'select');
     try {
-      await this.tryRef('select', binding, operation, ['--', label]);
+      await this.run(['select', ref, '--timeout-ms', String(Math.min(this.toolBudget(operation), SELECT_WAIT_MS)), '--', label], { label: 'select', input: true, signal: operation.signal, timeoutMs: operation.timeoutMs, raw: true });
     } catch (cause) {
       // `select` answers ELEMENT_NOT_FOUND for an option it cannot find; a list that is gone is a stale ref.
       if (cause instanceof AgentDesktopFailure && cause.notDelivered && cause.code === 'ELEMENT_NOT_FOUND') throw notActionable(`the list has no option "${label}"`);
+      if (cause instanceof AgentDesktopFailure && !cause.notDelivered && (await this.closeOpenMenu(binding.windowId, operation))) {
+        throw notActionable(`the list has no option "${label}": agent-desktop opened its menu and could not choose it, and the menu was closed`);
+      }
       throw translate(cause, `select "${label}"`, true);
+    }
+  }
+
+  /**
+   * Closes a menu the launched process has open, with Escape. True only when
+   * a menu was open and is closed now; false when there was none, or it
+   * cannot be told whose it is (another copy shares the app's name).
+   */
+  private async closeOpenMenu(window: string | undefined, operation: OperationContext): Promise<boolean> {
+    const { appName, pid } = this;
+    if (appName === undefined || pid === undefined || window === undefined) return false;
+    const menus = async (): Promise<number | undefined> => {
+      const listed = await this.run<{ pid?: number; surfaces?: readonly { type?: string }[] }>(['list-surfaces', '--app', appName], { label: 'list surfaces', input: false, signal: operation.signal, timeoutMs: operation.timeoutMs }).catch(() => undefined);
+      if (listed?.pid !== pid) return undefined;
+      return (listed.surfaces ?? []).filter((surface) => surface.type?.includes('menu') === true).length;
+    };
+    if (((await menus()) ?? 0) === 0) return false;
+    await this.sendKey('escape', window, 'close menu', operation);
+    // A menu takes a moment to close after Escape.
+    const until = Date.now() + Math.min(MENU_CLOSE_MS, operation.timeoutMs);
+    for (;;) {
+      if ((await menus()) === 0) return true;
+      if (Date.now() + LAUNCH_POLL_MS >= until) return false;
+      await sleep(LAUNCH_POLL_MS, operation.signal);
     }
   }
 
@@ -1028,7 +1063,44 @@ export class DesktopSurface {
   async pressKey(key: string, context: OperationContext): Promise<void> {
     const operation = withDeadline(context);
     const combo = toCombo(key);
-    await this.scoped((scope) => ['press', combo, ...scope, ...(this.options.headed ? ['--headed'] : [])], operation, { label: `press ${key}`, input: true });
+    const window = await this.ownWindow(operation);
+    if (window === undefined) throw this.chosenWindow === undefined ? invalidState('the app is not running; open it with app.open()') : this.chosenClosed();
+    await this.sendKey(combo, window.id, `press ${key}`, operation);
+  }
+
+  /**
+   * Sends one key combo to the launched process. agent-desktop sends a key
+   * to a named window only while that window is active, which an app in the
+   * background never is; there the key goes to the process by its app name,
+   * which agent-desktop refuses when two copies share it, and which the
+   * engine sends only once it has seen that its copy is the only one. With
+   * `headed`, agent-desktop brings the window forward first.
+   */
+  private async sendKey(combo: string, window: string, label: string, operation: OperationContext): Promise<void> {
+    const call = { label, input: true, signal: operation.signal, timeoutMs: operation.timeoutMs };
+    if (this.options.headed) {
+      await this.run(['press', combo, '--window-id', window, '--headed'], call);
+      return;
+    }
+    try {
+      await this.run(['press', combo, '--window-id', window], { ...call, raw: true });
+      return;
+    } catch (cause) {
+      if (!(cause instanceof AgentDesktopFailure && cause.notDelivered && cause.details.cause === 'exact_window_focus_unconfirmed')) throw translate(cause, label, true);
+    }
+    const { appName, pid } = this;
+    if (appName === undefined || pid === undefined) throw invalidState('the app is not running; open it with app.open()');
+    const another = (): EngineError =>
+      notActionable(`another copy of ${appName} is running, and a key to an app in the background is sent by its name, which could reach that copy; quit it, or set desktop({ headed: true })`);
+    const { apps } = await this.run<{ apps?: readonly RawApp[] }>(['list-apps', '--app', appName], { label: `find ${appName}`, input: false, signal: operation.signal, timeoutMs: operation.timeoutMs });
+    const copies = (apps ?? []).filter((app) => typeof app.pid === 'number');
+    if (copies.length !== 1 || copies[0]!.pid !== pid || (this.instance !== undefined && copies[0]!.process_instance !== this.instance)) throw another();
+    try {
+      await this.run(['press', combo, '--app', appName], { ...call, raw: true });
+    } catch (cause) {
+      if (cause instanceof AgentDesktopFailure && cause.notDelivered && cause.code === 'AMBIGUOUS_TARGET') throw another();
+      throw translate(cause, label, true);
+    }
   }
 
   // --- pixels ---
@@ -1149,7 +1221,10 @@ function inheritedEnv(env: Readonly<Record<string, string | undefined>>): Record
  * the text of plain fields there, and a worker that was killed never
  * removed its own. A directory goes once the process its owner file names
  * is gone, or, with no owner file, once it is a day old. One still in use
- * is never touched.
+ * is never touched. The app such a worker launched and left running is
+ * quit too, but only while its environment still shows the launch token:
+ * a process that took over its id since, or whose environment cannot be
+ * read, is left alone.
  */
 async function sweepStateDirectories(): Promise<void> {
   const root = tmpdir();
@@ -1159,7 +1234,18 @@ async function sweepStateDirectories(): Promise<void> {
     const directory = path.join(root, entry);
     const owner = Number((await readFile(path.join(directory, OWNER_FILE), 'utf8').catch(() => '')).trim());
     const stale = Number.isInteger(owner) && owner > 0 ? !alive(owner) : await stat(directory).then((info) => Date.now() - info.mtimeMs > ORPHAN_AGE_MS, () => false);
-    if (stale) await rm(directory, { recursive: true, force: true }).catch(() => undefined);
+    if (!stale) continue;
+    const parsed: unknown = await readFile(path.join(directory, APP_FILE), 'utf8').then((text): unknown => JSON.parse(text), () => undefined);
+    const launched = typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {};
+    const { pid, token } = launched;
+    if (typeof pid === 'number' && typeof token === 'string' && alive(pid) && (await carriesToken(pid, token, AbortSignal.timeout(5_000))) === true) {
+      try {
+        process.kill(pid, 'SIGKILL');
+      } catch {
+        // Gone already.
+      }
+    }
+    await rm(directory, { recursive: true, force: true }).catch(() => undefined);
   }
 }
 

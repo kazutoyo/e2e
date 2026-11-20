@@ -132,7 +132,7 @@ the one `screen` reads (`desktop.useWindow(window)`), and quits the app
 | --- | --- |
 | Input | The app runs in the background, and actions use the accessibility API, so your pointer, focus, and typing stay where they are. An app that opens no window in the background, such as a document-based one, is brought forward once |
 | Physical input | `doubleTap`, `hover`, point taps, and typing into whatever has focus need `desktop({ headed: true })`, which brings the app forward and uses the real pointer and keyboard |
-| Keys | `press` on a control sends the key only while that control has focus, in the window the app sends keys to |
+| Keys | `press` on a control sends the key only while that control has focus, in the window the app sends keys to. An app in the background gets keys by its name, so while another copy of it runs, such as a second desktop target on the same app, `press` needs `headed: true` |
 | Select | `selectOption` takes an option's label, not an index |
 | Windows | `screen` reads one window of the app: the one `desktop.useWindow()` picked, else the focused one, else the first visible one. Sheets are part of their window. The window's own Close, Minimize, and Zoom buttons are left out |
 | Menu bar | The app's menu bar cannot be read yet. Use a key shortcut with `press` |
@@ -143,8 +143,8 @@ the one `screen` reads (`desktop.useWindow(window)`), and quits the app
 
 A screenshot that cannot cover a password field is not saved. agent-desktop
 keeps the text of other fields in each worker's private state directory. The
-engine removes it when the worker ends, and the next run removes one a
-killed worker left behind.
+engine removes it when the worker ends. The next run removes one a killed
+worker left behind, and quits the app that worker left running.
 
 ## Options
 
