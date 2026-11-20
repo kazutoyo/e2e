@@ -1695,11 +1695,11 @@ describe('device fixture', () => {
     });
   });
 
-  describe('dismissing a keyboard that has no dismiss key', () => {
+  describe('dismissing a keyboard agent-device refuses', () => {
     const NO_DISMISS_KEY = () => {
       throw new AppError(
         'UNSUPPORTED_OPERATION',
-        'Unable to dismiss the iOS keyboard: the keyboard exposes no dismiss key, and background taps are never attempted',
+        'The Apple runner cannot dismiss this keyboard automatically',
       );
     };
     const KEYBOARD_FRAME = { x: 0, y: 583, width: 390, height: 261 };
@@ -1892,7 +1892,7 @@ describe('device fixture', () => {
       captures(h, [covered]);
       await expect(device.dismissKeyboard()).rejects.toMatchObject({
         code: 'UNSUPPORTED_CAPABILITY',
-        message: expect.stringMatching(/every point above it .*is on a control.*Done or close control/s),
+        message: expect.stringMatching(/every point above the keyboard .*is on a control.*Done or close control/s),
       });
       expect(h.fake.calls.filter((call) => call.method === 'interactions.swipe')).toHaveLength(0);
     });

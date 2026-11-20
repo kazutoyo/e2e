@@ -4,6 +4,7 @@
   <a href="https://www.npmjs.com/package/e2e"><img alt="npm version" src="https://img.shields.io/npm/v/e2e.svg?style=for-the-badge&labelColor=000000" /></a>
   <a href="https://www.npmjs.com/package/e2e"><img alt="npm monthly downloads" src="https://img.shields.io/npm/dm/e2e.svg?style=for-the-badge&labelColor=000000" /></a>
   <a href="./LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-green.svg?style=for-the-badge&labelColor=000000" /></a>
+  <a href="https://www.skills.sh/e2e-inc/e2e"><img alt="skills.sh installs" src="https://www.skills.sh/b/e2e-inc/e2e?style=for-the-badge&labelColor=000000" /></a>
   <a href="https://e2e.com/discord"><img alt="Join the community on Discord" src="https://img.shields.io/badge/Join%20the%20community-5865F2.svg?style=for-the-badge&logo=discord&logoColor=white&labelColor=000000" /></a>
 </p>
 

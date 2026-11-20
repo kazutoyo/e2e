@@ -1,6 +1,6 @@
 {
   "name": "e2e",
-  "version": "0.23.1",
+  "version": "0.24.0",
   "description": "SDK, runner, and CLI for agentic end-to-end testing",
   "mcpName": "io.github.e2e-inc/e2e",
   "keywords": [
@@ -55,6 +55,10 @@
     "./runner": {
       "types": "./dist/runner.d.ts",
       "default": "./dist/runner.js"
+    },
+    "./reporters": {
+      "types": "./dist/reporters.d.ts",
+      "default": "./dist/reporters.js"
     },
     "./oauth/chatgpt": {
       "types": "./dist/oauth/chatgpt.d.ts",

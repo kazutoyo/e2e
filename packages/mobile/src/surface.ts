@@ -1662,9 +1662,9 @@ export class AgentDeviceSurface {
 
   /**
    * Hides the soft keyboard, so a control it covered can be reached.
-   * agent-device presses the keyboard's own dismiss key and refuses when the
-   * keyboard has none (an iPhone), because a touch outside the keyboard is a
-   * guess about the screen it never makes on a caller's behalf. The engine
+   * agent-device hides an Android keyboard itself and refuses every visible
+   * iOS one, because a touch on the screen is a guess about it that
+   * agent-device never makes on a caller's behalf. The engine
    * makes that guess, the way a user does and Maestro's `hideKeyboard` does,
    * in {@link dismissKeyboardByGesture}.
    */
@@ -1680,7 +1680,7 @@ export class AgentDeviceSurface {
   }
 
   /**
-   * A keyboard with no dismiss key goes the way a user sends it away: a short
+   * A keyboard agent-device refuses goes the way a user sends it away: a short
    * drag on the screen, which a scroll view turns into a dismissal, each
    * followed by a fresh look at whether the keyboard is still there.
    * Horizontal first: on a vertical scroll view it is no scroll, so React
@@ -1711,7 +1711,7 @@ export class AgentDeviceSurface {
       if (from === undefined) {
         throw new EngineError(
           'UNSUPPORTED_CAPABILITY',
-          `keyboard dismissal failed: the keyboard has no dismiss key, and every point above it (in a scroll view, when the screen has one) is on a control, so a drag would press one. ${KEYBOARD_ALTERNATIVES}`,
+          `keyboard dismissal failed: every point above the keyboard (in a scroll view, when the screen has one) is on a control, so a drag would press one. ${KEYBOARD_ALTERNATIVES}`,
           { retryable: false },
         );
       }
@@ -1724,7 +1724,7 @@ export class AgentDeviceSurface {
     }
     throw new EngineError(
       'UNSUPPORTED_CAPABILITY',
-      `keyboard dismissal failed: the keyboard has no dismiss key and stayed up through a horizontal and a vertical drag. ${KEYBOARD_ALTERNATIVES}`,
+      `keyboard dismissal failed: the keyboard stayed up through a horizontal and a vertical drag. ${KEYBOARD_ALTERNATIVES}`,
       { retryable: false },
     );
   }

@@ -1173,6 +1173,32 @@
       }
     },
     {
+      "slug": "notte",
+      "title": "Testing in Notte cloud browsers with e2e",
+      "shortTitle": "Notte",
+      "description": "Each test attempt runs in its own Notte cloud browser, through a browser provider for e2e's web engine.",
+      "source": "partner",
+      "repository": "https://github.com/nottelabs/notte/tree/704dcf9d4ce534955937cde8e557b302336394d3/examples/e2e",
+      "author": {
+        "name": "Notte",
+        "github": "nottelabs",
+        "website": "https://www.notte.cc"
+      },
+      "license": "SSPL-1.0",
+      "licenseUrl": "https://github.com/nottelabs/notte/blob/704dcf9d4ce534955937cde8e557b302336394d3/LICENSE",
+      "tags": {
+        "framework": [
+          "nodejs"
+        ],
+        "useCase": [
+          "cloud-browsers"
+        ],
+        "platform": [
+          "web"
+        ]
+      }
+    },
+    {
       "slug": "pipedash",
       "title": "Testing Pipedash's App Store screenshot editor with e2e",
       "shortTitle": "Pipedash",
@@ -1346,31 +1372,6 @@
           "web",
           "ios",
           "android"
-        ]
-      }
-    },
-    {
-      "slug": "notte",
-      "title": "Testing in Notte cloud browsers with e2e",
-      "shortTitle": "Notte",
-      "description": "Each test attempt runs in its own Notte cloud browser, through a browser provider for e2e's web engine.",
-      "source": "community",
-      "repository": "https://github.com/nottelabs/notte/tree/704dcf9d4ce534955937cde8e557b302336394d3/examples/e2e",
-      "author": {
-        "name": "Notte",
-        "github": "nottelabs"
-      },
-      "license": "SSPL-1.0",
-      "licenseUrl": "https://github.com/nottelabs/notte/blob/704dcf9d4ce534955937cde8e557b302336394d3/LICENSE",
-      "tags": {
-        "framework": [
-          "nodejs"
-        ],
-        "useCase": [
-          "cloud-browsers"
-        ],
-        "platform": [
-          "web"
         ]
       }
     },

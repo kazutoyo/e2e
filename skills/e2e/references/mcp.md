@@ -18,8 +18,9 @@ screen where it failed.
 ## Setup
 
 The server ships with the project's `e2e` dependency. The e2e plugin for
-Claude Code, Codex, and Cursor registers it too, as `npx -y e2e@<version> mcp`, pinned to the plugin's release (it runs that release even when the project has another e2e version); with
-the plugin installed there is nothing to add. Otherwise `e2e init` offers to register it for Claude Code,
+Codex and Cursor registers it too, as `npx -y e2e@<version> mcp`, pinned to the plugin's release (it runs that release even when the project has another e2e version); with
+that plugin installed there is nothing to add. The Claude Code plugin does
+not register it. Otherwise `e2e init` offers to register it for Claude Code,
 Cursor, and Codex. Reuse an existing registration; when adding one, use the project's
 config so it starts in the project it drives. Install dependencies and start
 the MCP client in that directory so `npx` uses the installed e2e version. In a
@@ -86,8 +87,7 @@ sets how many sessions may be open at once (default 4, 1 through 16; one on Bun)
 
 Four tools, all on the server registered as `e2e`; everything a session can
 do is a catalog behind `call`. Clients show them with the server name, such
-as `mcp__e2e__open_session` in Claude Code (`mcp__plugin_e2e_e2e__open_session`
-from the plugin); when another MCP server offers a
+as `mcp__e2e__open_session` in Claude Code; when another MCP server offers a
 tool with the same name, use the `e2e` server's.
 
 | Tool | Does |
