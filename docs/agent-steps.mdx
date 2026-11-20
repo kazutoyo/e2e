@@ -91,6 +91,11 @@ Only `failed` and `blocked` carry an error code.
 The [errors reference](/reference/errors#agenterror) lists every code a
 verdict can carry.
 
+When a step only asks for actions, the agent may send its verdict in the
+same turn as the last action, and the step returns without another model
+call. The runner takes that verdict after those actions run, and refuses it
+when one failed or the last one changed nothing.
+
 ## What a step costs
 
 Each call has a model-call budget and a default timeout. See
