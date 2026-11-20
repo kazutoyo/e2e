@@ -455,7 +455,7 @@ const conditions = browser.locator(
 );
 ```
 
-- セレクターはデフォルトで CSS です。`xpath=` または先頭の `//` で XPath になり、`>>` で連結できます。そのため、例では CSS の検索範囲を 1 行に限定しています。
+- セレクターはデフォルトで CSS です。`xpath=` または先頭の `//` で XPath になり、`>>` で連結できます。例では、この連結を使って CSS の検索範囲を 1 行に絞っています。
 - 別の要素を内包する要素には、`filter({ has })` を使います。
 
 | エラー | 発生条件 |
@@ -475,7 +475,7 @@ const payment = browser.frameLocator('#payment-frame');
 await payment.getByLabel('Card number').fill('4242424242424242');
 ```
 
-フレーム内からクエリ結果を返す `Screen` である `FrameScreen` を返します。フレームの `locator` は、コントロールにアクセシブルな名前、ラベル、プレースホルダー、テスト ID がない場合にだけ使ってください。該当する状況は[ブラウザガイド](/browser#reach-into-an-iframe)で説明しています。
+`FrameScreen` を返します。これは、クエリがフレーム内の要素を返す `Screen` です。フレームの `locator` は、コントロールにアクセシブルな名前、ラベル、プレースホルダー、テスト ID がない場合にだけ使ってください。該当する状況は[ブラウザガイド](/browser#reach-into-an-iframe)で説明しています。
 
 ```ts
 export interface FrameScreen extends Screen {
@@ -833,7 +833,7 @@ const file = await browser.waitForDownload(() =>
 
 #### `keyboard`
 
-フォーカスのある場所へ、ビューポート単位でキーボード入力を送ります。
+ビューポートに対してキーボード入力を送ります。入力先はフォーカスのある要素です。
 
 ```ts
 await browser.keyboard.press('Escape');
@@ -846,7 +846,7 @@ await browser.keyboard.type('hello');
 
 #### `mouse`
 
-エージェントの観測とは独立して、テストコードからビューポート単位のポインター入力を行います。
+エージェントの観測とは独立して、テストコードからビューポートに対してポインター入力を行います。
 
 ```ts
 await browser.mouse.move(120, 240);
