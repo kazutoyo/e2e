@@ -62,7 +62,7 @@ export interface NodeBinding {
   readonly windowId?: string;
   /** The node's box in the window, which finds it again where its id cannot (a look-alike's). */
   readonly rect?: Rect;
-  /** Whether the id comes from the node's identity, and so names it in the next snapshot too; a look-alike's is new in every snapshot. */
+  /** Whether the id comes from the node's identity and every ancestor's, and so names it in the next snapshot too; a look-alike's, or one inside a look-alike, is new in every snapshot. */
   readonly stable: boolean;
 }
 
@@ -179,14 +179,29 @@ function label(value: string | undefined): string | undefined {
 /** The names macOS gives a window's title-bar buttons, which have no title of their own. */
 const WINDOW_CONTROLS = new Set(['Close', 'Minimize', 'Zoom', 'Full Screen']);
 
+/** The largest a title-bar button is, in points: macOS draws them 14 to 16 points across. */
+const WINDOW_CONTROL_SIZE = 20;
+
 /**
  * A window's own title-bar button: a button straight under the window, with
- * no developer id, named only for what it does to the window. Left out, so
- * `getByRole('button', 'Close')` finds the app's Close button and not the
- * window's.
+ * no developer id, named only for what it does to the window, and the size
+ * of a title-bar button. Left out, so `getByRole('button', 'Close')` finds
+ * the app's Close button and not the window's; an app's own button of the
+ * same name is larger, and one with no bounds is kept.
  */
 function windowControl(raw: RawNode): boolean {
-  return raw.role === 'button' && raw.native_id === undefined && raw.name !== undefined && WINDOW_CONTROLS.has(raw.name) && label(raw.value) === undefined && label(raw.description) === undefined;
+  const bounds = raw.bounds;
+  return (
+    raw.role === 'button' &&
+    raw.native_id === undefined &&
+    raw.name !== undefined &&
+    WINDOW_CONTROLS.has(raw.name) &&
+    label(raw.value) === undefined &&
+    label(raw.description) === undefined &&
+    bounds !== undefined &&
+    bounds.width <= WINDOW_CONTROL_SIZE &&
+    bounds.height <= WINDOW_CONTROL_SIZE
+  );
 }
 
 /** A node agent-desktop reports but nothing reads: a wrapper with no name, value, id, ref, or text of its own. */
@@ -297,7 +312,8 @@ export function projectSnapshot(raw: RawSnapshot, idFor: (identity: string | und
     // look-alike gets a new id every snapshot.
     const children = kept.map((child) => {
       const identity = plain.get(identityOf(child)) === 1 ? identityOf(child) : named.get(identityOf(child, true)) === 1 ? identityOf(child, true) : undefined;
-      return project(child, idFor(identity === undefined ? undefined : `${id}/${identity}`), identity !== undefined);
+      // A child's id is built on its parent's: under a look-alike, whose id is new every snapshot, so is the child's.
+      return project(child, idFor(identity === undefined ? undefined : `${id}/${identity}`), stable && identity !== undefined);
     });
     return {
       ref: { id, revision: '' },

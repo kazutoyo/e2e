@@ -87,6 +87,13 @@ function cacheDirectory(env: Readonly<Record<string, string | undefined>>, targe
   return path.join(base, 'agent-desktop', `${AGENT_DESKTOP_VERSION}-${target}`);
 }
 
+/** Whether the pinned release is in the cache whole and checked, as `prepare` leaves it and a worker needs it. */
+export async function pinnedInstalled(env: Readonly<Record<string, string | undefined>>): Promise<boolean> {
+  const target = releaseTarget();
+  const digest = target === undefined ? undefined : ARCHIVE_DIGESTS[target];
+  return target !== undefined && digest !== undefined && (await usable(cacheDirectory(env, target), digest));
+}
+
 /** Where the executable is, or would be once `prepare` downloads it; undefined when nothing can be run here. */
 export function pinnedExecutable(env: Readonly<Record<string, string | undefined>>): string | undefined {
   const target = releaseTarget();
@@ -138,7 +145,6 @@ export async function installPinned(env: Readonly<Record<string, string | undefi
   const url = `https://github.com/vercel-labs/agent-desktop/releases/download/v${AGENT_DESKTOP_VERSION}/${archive}`;
   log(`downloading agent-desktop ${AGENT_DESKTOP_VERSION} (${target})`);
   try {
-    await rm(directory, { recursive: true, force: true });
     await download(url, archive, digest, directory, signal);
   } catch (cause) {
     if (cause instanceof InfrastructureError || signal.aborted) throw cause;
@@ -171,11 +177,17 @@ async function download(url: string, archive: string, digest: string, directory:
     if (process.platform !== 'win32') await chmod(path.join(staging, executableName()), 0o755);
     // Written last, so only a whole, checked unpack is ever stamped.
     await writeFile(path.join(staging, STAMP), digest);
+    // Another run may have unpacked the same release meanwhile; its copy is as good as ours.
+    if (await usable(directory, digest)) return;
+    // A damaged entry is moved aside, not deleted first, so the executable is missing only between two renames.
+    const aside = `${directory}.stale-${process.pid}-${Date.now()}`;
+    await rename(directory, aside).catch(() => undefined);
     try {
       await rename(staging, directory);
     } catch (cause) {
-      // Another run unpacked the same release first; its copy is as good as ours.
       if (!(await usable(directory, digest))) throw cause;
+    } finally {
+      await rm(aside, { recursive: true, force: true });
     }
   } finally {
     await rm(staging, { recursive: true, force: true });

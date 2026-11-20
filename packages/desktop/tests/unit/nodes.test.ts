@@ -76,6 +76,16 @@ describe('projectSnapshot', () => {
       minter(),
     );
     expect(all(own.root).filter((node) => node.role === 'button' && node.name === 'Close')).toHaveLength(2);
+    const sheet = projectSnapshot({ snapshot_id: 's', tree: { role: 'window', name: 'About', children: [{ role: 'button', name: 'Close', ref_id: '@s:e1', bounds: { x: 0, y: 0, width: 80, height: 18 } }] } }, minter());
+    expect(all(sheet.root).filter((node) => node.role === 'button' && node.name === 'Close')).toHaveLength(1);
+  });
+
+  it('marks no id stable that sits inside a look-alike, whose own id is new every snapshot', () => {
+    const row = { role: 'row', children: [{ role: 'textfield', name: 'Name', ref_id: '@s:e1' }] };
+    const screen = projectSnapshot({ snapshot_id: 's', tree: { role: 'window', name: 'W', children: [row, row, { role: 'textfield', name: 'Search', ref_id: '@s:e2' }] } }, minter());
+    const stable = (name: string) => [...screen.bindings.values()].filter((binding) => binding.name === name).map((binding) => binding.stable);
+    expect(stable('Name')).toEqual([false, false]);
+    expect(stable('Search')).toEqual([true]);
   });
 
   it('answers role and test-id queries through the shared resolver', () => {

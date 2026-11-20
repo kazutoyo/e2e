@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { OperationContext } from '@e2e-dev/core/engine';
 import { afterEach, describe, expect, it } from 'vitest';
+import { pinnedExecutable } from '../../src/binary.ts';
 import { resolveOptions } from '../../src/options.ts';
 import { DesktopSurface } from '../../src/surface.ts';
 import { cleanupFakes, failure, fakeScenario, snapshotAnswer, type Scenario } from '../helpers/fake.ts';
@@ -767,6 +768,45 @@ describe('DesktopSurface', () => {
     await surface.useWindow(undefined, signal, 5_000);
     await surface.observe(operation(), undefined);
     expect(fake.calls().findLast((call) => call.key === 'snapshot')?.args).toEqual(expect.arrayContaining(['--window-id', 'w-mine']));
+  });
+
+  it('fails the open of an app that quit right after it launched, and brings nothing forward', async () => {
+    const started = Date.now();
+    await expect(
+      launched({ launch: [{ spawn: true, exits: true, ok: true, data: { app: 'SpikeForm', pid: SPAWNED, process_instance: 'instance-1' } }], 'list-windows': [{ ok: true, data: [] }] }, { observe: false }),
+    ).rejects.toThrow(/quit right after it launched/);
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
+  it('refuses to read a chosen window once it closed, rather than show an empty screen', async () => {
+    const { surface } = await launched((pid) => ({
+      'list-windows': [
+        { ok: true, data: [{ id: 'w-mine', pid, process_instance: 'instance-1', is_focused: true }, { id: 'w-panel', pid, process_instance: 'instance-1' }] },
+        { ok: true, data: [{ id: 'w-mine', pid, process_instance: 'instance-1', is_focused: true }, { id: 'w-panel', pid, process_instance: 'instance-1' }] },
+        { ok: true, data: [{ id: 'w-mine', pid, process_instance: 'instance-1', is_focused: true }, { id: 'w-panel', pid, process_instance: 'instance-1' }] },
+        { ok: true, data: [{ id: 'w-mine', pid, process_instance: 'instance-1', is_focused: true }] },
+      ],
+    }));
+    await surface.useWindow('w-panel', signal, 5_000);
+    const missing = { kind: 'query', query: { kind: 'testId', value: { kind: 'string', value: 'nowhere', exact: true } } } as const;
+    await expect(surface.locate(missing, operation())).rejects.toMatchObject({ code: 'INVALID_STATE', message: expect.stringMatching(/useWindow\(\) chose/) });
+    await expect(surface.pressKey('Enter', operation())).rejects.toThrow(/useWindow\(\) chose/);
+  });
+
+  it('tells doctor the pinned release is not there yet when the cache holds no checked copy', async () => {
+    const home = mkdtempSync(path.join(tmpdir(), 'e2e-desktop-doctor-'));
+    try {
+      const env = { HOME: home, XDG_CACHE_HOME: path.join(home, 'cache') };
+      // An executable an older version unpacked, which no verified unpack stamped.
+      const executable = pinnedExecutable(env)!;
+      mkdirSync(path.dirname(executable), { recursive: true });
+      writeFileSync(executable, '#!/bin/sh\n', { mode: 0o755 });
+      const surface = tracked(new DesktopSurface(resolveOptions({}), 'macos'));
+      const checks = await surface.doctor({ targetName: 'mac', projectRoot: home, app: { bundleId: 'com.example.app' }, env, headed: false, signal, log: () => undefined });
+      expect(checks.find((check) => check.id === 'agent-desktop')).toMatchObject({ status: 'warn', message: expect.stringMatching(/run e2e doctor again/) });
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 
   it("sends no key into a window that cannot be shown to be the app's key window", async () => {

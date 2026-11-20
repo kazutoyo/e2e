@@ -36,7 +36,7 @@ import {
   type SemanticNode,
   type ViewportPoint,
 } from '@e2e-dev/core/engine';
-import { AGENT_DESKTOP_VERSION, installPinned, pinnedExecutable, resolveExecutable } from './binary.ts';
+import { AGENT_DESKTOP_VERSION, installPinned, pinnedExecutable, pinnedInstalled, resolveExecutable } from './binary.ts';
 import { AgentDesktopCli, AgentDesktopFailure, translate } from './cli.ts';
 import { toCombo } from './keys.ts';
 import { ROOT_ID, projectSnapshot, type NodeBinding, type ProjectedScreen, type RawSnapshot, type Rect } from './nodes.ts';
@@ -327,7 +327,7 @@ export class DesktopSurface {
     const checks: EngineDoctorCheck[] = [];
     const executable = this.options.binary === undefined ? pinnedExecutable(info.env) : path.resolve(info.projectRoot, this.options.binary);
     if (executable === undefined) return [{ id: 'agent-desktop', status: 'fail', message: `agent-desktop has no release for ${process.platform} on ${process.arch}` }];
-    if (!existsSync(executable)) {
+    if (this.options.binary === undefined ? !(await pinnedInstalled(info.env)) : !existsSync(executable)) {
       checks.push(
         this.options.binary === undefined
           ? {
@@ -457,15 +457,21 @@ export class DesktopSurface {
       throw new EngineError('ACTION_MAY_HAVE_COMMITTED', `opening ${bundle} failed: ${(cause as Error).message}`, { retryable: false, cause });
     }
     const until = Date.now() + Math.min(operation.timeoutMs, LAUNCH_READY_MS);
-    while (!(await this.claim(launch, operation))) {
-      if (Date.now() + LAUNCH_POLL_MS >= until || operation.signal.aborted) {
-        throw new EngineError(
-          'ACTION_MAY_HAVE_COMMITTED',
-          `${bundle} was opened, but no process of ${launch.target} could be shown to be this launch's: none carries its token, and no single new one appeared. Quit other copies of the app that are starting, and run again`,
-          { retryable: false },
-        );
+    try {
+      while (!(await this.claim(launch, operation))) {
+        if (Date.now() + LAUNCH_POLL_MS >= until || operation.signal.aborted) {
+          throw new EngineError(
+            'ACTION_MAY_HAVE_COMMITTED',
+            `${bundle} was opened, but no process of ${launch.target} could be shown to be this launch's: none carries its token, and no single new one appeared. Quit other copies of the app that are starting, and run again`,
+            { retryable: false },
+          );
+        }
+        await sleep(LAUNCH_POLL_MS, operation.signal);
       }
-      await sleep(LAUNCH_POLL_MS, operation.signal);
+    } catch (cause) {
+      // `open` ran, so the app may be starting whatever went wrong after it: the launch stays pending, and the end of the attempt looks for it.
+      if (cause instanceof EngineError && cause.code === 'ACTION_MAY_HAVE_COMMITTED') throw cause;
+      throw new EngineError('ACTION_MAY_HAVE_COMMITTED', `${bundle} was opened, but looking for its process failed: ${(cause as Error).message}`, { retryable: false, cause });
     }
   }
 
@@ -528,6 +534,13 @@ export class DesktopSurface {
         throw cause;
       }
       if (screen !== undefined) return;
+      // An app that quit (or crashed) on its own never shows a window, and bringing its bundle forward would start a copy the engine does not own.
+      if (this.pid !== undefined && !alive(this.pid)) {
+        this.forget();
+        this.pid = undefined;
+        this.instance = undefined;
+        throw new EngineError('ENGINE_FAILURE', `${this.appName ?? 'the app'} quit right after it launched, before it showed a window`, { retryable: false });
+      }
       if (!activated && Date.now() - started >= ACTIVATE_AFTER_MS) {
         activated = true;
         await this.activate(operation);
@@ -576,6 +589,10 @@ export class DesktopSurface {
     const windows = await this.ownWindows({ signal, timeoutMs });
     if (!windows.some((window) => window.id === id)) throw notActionable(`the app has no window ${id}; desktop.windows() lists the ones it has`);
     this.chosenWindow = id;
+  }
+
+  private chosenClosed(): EngineError {
+    return invalidState(`the window desktop.useWindow() chose (${this.chosenWindow ?? ''}) is closed; choose another, or call desktop.useWindow() to go back to the focused one`);
   }
 
   /** `desktop.closeApp()`: the app quit, as at the end of every test. */
@@ -701,6 +718,8 @@ export class DesktopSurface {
    */
   private async capture(operation: OperationContext, windowId = this.chosenWindow, forMask = false): Promise<ProjectedScreen | undefined> {
     const windows = await this.ownWindows(operation);
+    // A chosen window that closed is not an empty screen: that would let a negative assertion pass.
+    if (windowId !== undefined && windowId === this.chosenWindow && windows.length > 0 && !windows.some((window) => window.id === windowId)) throw this.chosenClosed();
     const candidates =
       windowId === undefined
         ? [...windows.filter((window) => window.is_focused === true), ...windows.filter((window) => window.is_focused !== true && window.visible !== false), ...windows.filter((window) => window.is_focused !== true && window.visible === false)]
@@ -751,7 +770,7 @@ export class DesktopSurface {
    */
   private async scoped<T>(build: (scope: readonly string[]) => readonly string[], operation: OperationContext, call: { label: string; input: boolean }): Promise<T> {
     const window = await this.ownWindow(operation);
-    if (window === undefined) throw invalidState('the app is not running; open it with app.open()');
+    if (window === undefined) throw this.chosenWindow === undefined ? invalidState('the app is not running; open it with app.open()') : this.chosenClosed();
     return await this.run<T>(build(['--window-id', window.id]), { ...call, signal: operation.signal, timeoutMs: operation.timeoutMs });
   }
 

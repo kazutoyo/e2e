@@ -29,7 +29,8 @@ if (answer.spawn !== undefined) {
       env[name] = value.join('=');
     }
   }
-  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'], { env, detached: true, stdio: 'ignore' });
+  // `exits`: the app quits on its own right away.
+  const child = spawn(process.execPath, ['-e', answer.exits === true ? '' : 'setTimeout(() => {}, 60_000)'], { env, detached: true, stdio: 'ignore' });
   child.unref();
   appendFileSync(`${log}.spawned`, `${child.pid}\n`);
 }
