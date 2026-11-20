@@ -132,7 +132,7 @@ describe('todos', () => {
 
 | Cypress | 現在使える方法 |
 | --- | --- |
-| `supportFile`, `blockHosts` | `test.extend` で共有の `test` を作り、全ファイルからインポート。その中の `browser.route` で対象ホストを中断 |
+| `supportFile`, `blockHosts` | `test.extend` で共有の `test` を作り、全ファイルからインポート。その中で `browser.route` を使い、対象ホストへのリクエストを中断 |
 | `cypress run --record --parallel`、Cypress Cloud | CI ジョブごとの `--shard`、`junit` と `github()` レポーター、`.e2e` をアーティファクトとしてアップロード |
 | 4xx や 5xx のページで失敗する `cy.visit()` | `app.open` はステータスを無視。ページ内容を検証 |
 | `cy.stub()`, `cy.spy()`, `cy.clearLocalStorage()` | `browser.addInitScript` で関数をラップし、`browser.evaluate` で呼び出しを読むかストレージを消去 |
@@ -157,7 +157,7 @@ describe('todos', () => {
 - [ロケーター](/reference/screen)は厳密です。複数一致に対するアクションや単一ノードのアサーションは、`LOCATOR_AMBIGUOUS` で失敗します。`.filter()`、`.first()`、`.nth()` で絞るか、`await locator.all()` をループしてください。
 - クエリの文字列はテキスト全体に一致します。`{ exact: false }` は大文字・小文字を区別しない部分一致です。`cy.contains` は大文字・小文字を区別して最初の一致を選ぶため、RegExp を渡すか `.first()` を加えてください。
 - テキストのマッチャーは描画済みテキストを比較します。CSS の `text-transform` が適用され、非表示の子は除かれます。[ロケーターの読み取り](/reference/screen#locator-reads)を参照してください。
-- ダイアログを自動で承認しません。Cypress は承認しますが、ハンドラーのない `alert` や `confirm` は次のステップを失敗させます。
+- e2e はダイアログを自動で承認しません。ハンドラーのない `alert` や `confirm` は、Cypress では承認されますが、e2e では次のステップを失敗させます。
 
 ## デフォルト値の違い
 
