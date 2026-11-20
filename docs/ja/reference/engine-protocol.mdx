@@ -221,7 +221,7 @@ export interface EngineManifest {
 | `attempt/screen` | 通知 | `{ attemptId, snapshot }` |
 | `attempt/resolveSecret` | リクエスト | `{ attemptId, name, derivation? }`、結果は `{ value }` |
 
-`derivation` がある場合、クライアントは回答前に `attempt/deriveSecret` で `{ derivation, plaintext }` を問い合わせます。サーバーは、Basic 認証ヘッダーなど、エンジンが値から導いた形式を `{ values }` として返し、クライアントはそれらをシークレット名でマスキングします。
+`derivation` がある場合、クライアントは回答前に `attempt/deriveSecret` で `{ derivation, plaintext }` を問い合わせます。サーバーは、Basic 認証ヘッダーなど、エンジンが値から導いた形式を `{ values }` として返し、クライアントはそれらをシークレット名で秘匿します。
 
 ### シグナル
 

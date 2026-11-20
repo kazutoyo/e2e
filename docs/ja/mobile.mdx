@@ -271,7 +271,7 @@ const { nodes } = await client.capture.snapshot({});
 
 クライアント呼び出しはステップではありません。
 レポートやトレースに載らず、エージェントのキャッシュはリプレイしません。
-渡したシークレットはマスキングされず、呼び出し後に画面が落ち着くまで待つこともありません。
+渡したシークレットは秘匿されず、呼び出し後に画面が落ち着くまで待つこともありません。
 
 <Accordion title="テキストサイズとアニメーション">
 `device` にはシステムのテキストサイズやアニメーション用のメソッドがないため、`unstable_raw` で設定します。
@@ -469,7 +469,7 @@ export default {
 呼び出しは、現在の試行を実行しているエンジンに届きます。
 `open_app`、`swipe`、`alert` はデバイスの状態を変えるため、キャッシュのリプレイ中もライブ実行します。
 各ツールは [モバイルエンジンリファレンス](/reference/mobile#agent-tools) を参照してください。
-独自のツールを併用するには、[プロジェクトのツール](/tools) を参照してください。
+独自のツールを併用するには、[プロジェクトツール](/tools)を参照してください。
 
 ## 実機
 
@@ -740,7 +740,7 @@ export function cloudDevices(options: { provider: string; device: string; osVers
 | --- | --- |
 | `app.open('/path')` とエージェントの `navigate` 操作 | アプリの URL も `navigate` もありません。`app.open()` は `app.bundleId` を新たに起動し、`device.openLink(url)` はそのアプリにリンクを開きます。[`app.linkBase`](/reference/config#linkbase) があれば、`app.open('/path')` はパスをリンクとして開きます |
 | `test.setup` でセッションを保存し、`session:` で復元 | 利用できません。シミュレーターには、ほかのテストで再利用できるセッションのスナップショットがありません。テストごとにサインインするか、アプリにデータを投入します |
-| シークレットの入力 | `type_secret` と `screen.getByLabel(...).fill(secret)` が、宣言済みシークレットを保護されたフィールドに入力します |
+| シークレットの入力 | `type_secret` と `screen.getByLabel(...).fill(secret)` が、宣言済みシークレットを機密フィールドに入力します |
 | `--video` は WebM の画面録画を保存 | `--video` はタップ表示付きのデバイス画面を MP4 で保存します（`videoTouches: false` で非表示）。またはデバイスプロバイダー独自の録画を保持します |
 | キャッシュの基準はページのパス | キャッシュの基準は `<bundle id> / <screen title>` という場所です。タイトルは iOS のナビゲーションバー、Android のツールバーから読み取ります |
 
