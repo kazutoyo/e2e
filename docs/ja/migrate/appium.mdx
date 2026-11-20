@@ -15,7 +15,7 @@ export const migrationPrompt = `このプロジェクトの Appium テストを�
 6. ガイドの表を使い、ケイパビリティを e2e の設定に移してください。プラットフォームごとに \`mobile({ platform, device })\` を使うターゲットを作り、それぞれに \`app: { bundleId, appPath, launchArguments, permissions }\` を設定します。パスワードとトークンは \`credentials\` または \`secrets\` に移してください。
 7. 依存関係をインストールし、\`npx e2e doctor\`（e2e 0.23.0 以降）を実行して、報告された問題を修正してください。
 8. Appium テストを一覧にし、どれから移行するか私に確認してください。XPath セレクターや明示的な待機が頻繁に壊れるテストを提案してください。
-9. そのテストを \`tests/\` 以下の \`.e2e.ts\` に書き換えてください（e2e はデフォルトで \`tests/**/*.e2e.ts\` を実行します）。自動では起動しないため、\`app.open()\` から始めてください。ガイドの「セレクターの書き換え」に従ってください。XPath は移植できず、e2e は複数一致で失敗します。移行前に、使われている各ケイパビリティとコマンドを「e2e にまだない機能」と照合してください。「現在使える方法」を使うか、そのテストを Appium に残して理由を説明してください。
+9. そのテストを \`tests/\` 以下の \`.e2e.ts\` に書き換えてください（e2e はデフォルトで \`tests/**/*.e2e.ts\` を実行します）。アプリは自動では起動しないため、\`app.open()\` から始めてください。ガイドの「セレクターの書き換え」に従ってください。XPath は移植できず、e2e は複数一致で失敗します。移行前に、使われている各ケイパビリティとコマンドを「e2e にまだない機能」と照合してください。「現在使える方法」を使うか、そのテストを Appium に残して理由を説明してください。
 10. 起動と最終的な検証は、\`app.open()\` とロケーターのアサーションで決定論的に保ってください。スクリプト化した一連のタップが頻繁に壊れる箇所には、代わりに \`agent.act\` のゴールを提案してください。
 11. アプリをビルドしてインストールし、各プラットフォームのターゲットで \`npx e2e run <file>\` を実行して、成功するまで修正してください。Appium テストは、削除してよいと私が確認するまで残してください。
 12. 移行したテスト、Appium に残したテスト、それぞれの理由をまとめてください。`;
@@ -195,7 +195,7 @@ await agent.act('sign in as {username}', { params: { username: ada.username, pas
 | `driver.acceptAlert()`, `driver.dismissAlert()` | `device.alert('accept')`、`device.alert('dismiss')` |
 | `driver.setGeoLocation({ latitude, longitude })` | `device.setLocation({ latitude, longitude })` |
 | `driver.setOrientation('LANDSCAPE')`, `mobile: setAppearance` | `device.setOrientation('landscape-left')`、`device.setAppearance('dark')` |
-| `driver.setClipboard(t)`, `driver.getClipboard()` | `device.setClipboard(t)`、`device.clipboard()`。Appium の base64 に対し、プレーンテキスト |
+| `driver.setClipboard(t)`, `driver.getClipboard()` | `device.setClipboard(t)`、`device.clipboard()`。Appium は base64 を使うが、e2e はプレーンテキスト |
 | `driver.toggleWiFi(false)`, `wifi: false` を指定した `mobile: setConnectivity` | `device.setNetwork('offline')`。Wi-Fi のみ、Android のみ |
 | `driver.toggleAirplaneMode()`、`airplaneMode: true` を指定した `mobile: setConnectivity` | `device.setAirplaneMode(true)`。Wi-Fi と携帯回線、Android 11 以降 |
 | `mobile: enrollBiometric`, `mobile: sendBiometricMatch`, `driver.fingerPrint(1)` | `device.enrollBiometrics('faceid', true)`、`device.setBiometrics('faceid', 'match')`、または `'fingerprint'` |
@@ -275,7 +275,7 @@ bunx e2e run --target ios --reporter list,junit
 ## e2e にまだない機能
 
 「実装予定」の項目はロードマップにあり、「未対応」の項目は時期が未定です。「実装予定なし」は意図的に対象外としています。
-[`unstable_raw`](/reference/mobile#unstable_raw) 経由の呼び出しはステップではないため、レポートへの記録とシークレットの秘匿を経由しません。
+[`unstable_raw`](/reference/mobile#unstable_raw) 経由の呼び出しはステップではないため、レポートに記録されず、シークレットの秘匿も行われません。
 
 ### 実装予定
 

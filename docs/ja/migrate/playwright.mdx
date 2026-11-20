@@ -106,7 +106,7 @@ test('checkout', async ({ app, agent, screen }) => {
 
 | Playwright | e2e |
 | --- | --- |
-| `click()`, `dblclick()` | `tap()`、`doubleTap()`。`click()` と `dblclick()` は別名 |
+| `click()`, `dblclick()` | `tap()`、`doubleTap()`。`click()` と `dblclick()` はその別名 |
 | `click({ button: 'right' })`, `click({ delay })` | `secondaryTap()`、`longPress({ duration })` |
 | `click({ position })`, `click({ modifiers })` | `tap({ position })`、`tap({ modifiers })` |
 | `fill()`, `pressSequentially()`, `clear()`, `focus()`, `blur()`, `hover()`, `check()`, `uncheck()`, `dragTo()`, `setInputFiles(path)`, `selectOption({ label })` または `{ value }` | 同じ。ただし `force`、`trial`、`position` はなし |
@@ -188,7 +188,7 @@ test('checkout', async ({ app, agent, screen }) => {
 
 ## ページオブジェクトを移す
 
-ページオブジェクトには、クエリとアクション用に `screen`、キーボード、マウス、CSS セレクター、`evaluate` 用に `browser` を渡します。フィクスチャとして提供してください。
+ページオブジェクトには、クエリとアクション用に `screen` を、キーボード、マウス、CSS セレクター、`evaluate` 用に `browser` を渡します。フィクスチャとして提供してください。
 
 ```ts title="tests/page-models/account-page.ts"
 import type { Locator, Screen } from 'e2e';
@@ -323,7 +323,7 @@ export const test = base.extend<{ accountPage: AccountPage }>({
 | `getByRole(role, { includeHidden })` | `browser.locator('role=button[include-hidden=true]')`。ロールクエリはアクセシビリティツリーに従う |
 | タグの `--grep @smoke`、位置引数の正規表現、`file:line:column` | `--tag smoke`。glob または単独の名前。`file:line` |
 | `getByTitle()` | `browser.locator('[title="Close"]')`。title は DOM 属性なので `screen` のクエリはなし |
-| `page.waitForLoadState()` | 次のページの表示内容へのアサーション。ページ遷移は `load` を待ち、各アクションとアサーションは自身のノードを待つ |
+| `page.waitForLoadState()` | 次のページの表示内容へのアサーション。ページ遷移は `load` を待ち、各アクションとアサーションは対象のノードを待つ |
 | `npx playwright codegen`、Inspector | [`npx e2e mcp`](/mcp-server) でコーディングエージェントがアプリを操作しながらテストを作成。`screen.debug()` でツリーを表示 |
 | `{ force: true }`, `{ trial: true }` | `tap({ position })` は操作可能性の検証を省略。試行的な確認には `toBeVisible()` と `toBeEnabled()` |
 | `ariaSnapshot()`, `toMatchAriaSnapshot()`, `toMatchSnapshot()` | `expect(await screen.tree()).toContain(...)`。フィクスチャのファイルと `toEqual` |
